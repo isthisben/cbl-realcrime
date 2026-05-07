@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Cached GeoJSON (downloaded on first run)
+data/
+
+# Generated shareable assets (regenerate via `python build_assets.py`)
+exports/
+
+# Local notes
+notes.md
+TODO.md
