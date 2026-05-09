@@ -124,7 +124,7 @@ def build_map(scenario: str, selected_force: str | None) -> go.Figure:
 
 def build_radar(force_name: str) -> go.Figure:
     """
-    14-axis radar of the force's crime mix vs the national average.
+    13-axis radar of the force's crime mix vs the national average.
     National average shows up as a unit circle (1.0 on every axis);
     force values are ratios of force_share / national_share.
     """
@@ -211,7 +211,7 @@ app.layout = html.Div([
         html.P([
             "Comparing current officer distribution against a harm-weighted ",
             "allocation using the Cambridge Crime Harm Index. ",
-            html.Span("TU/e 4CBLW020 — mockup data", className="subtitle"),
+            html.Span("TU/e 4CBLW020", className="subtitle"),
         ]),
     ], className="app-header"),
 
@@ -253,6 +253,88 @@ app.layout = html.Div([
             "mix of offences inside its violence/sexual category — common assault, "
             "GBH, rape, homicide, etc. Forces with a more severe mix score higher.",
         ], className="toggle-explainer"),
+
+        html.Details([
+            html.Summary("How the harm score is calculated"),
+            html.Div([
+                html.P([
+                    "Per force, harm = Σ (count × weight) across the 13 ",
+                    "Home Office crime categories. The Violence and sexual ",
+                    "offences category is split internally into the seven ",
+                    "PRC offence subgroups, each carrying its own Cambridge ",
+                    "Crime Harm Index 2020 weight (Sherman et al.):",
+                ]),
+                html.Table([
+                    html.Thead(html.Tr([
+                        html.Th("Subgroup (PRC Offence Subgroup)"),
+                        html.Th("CCHI weight"),
+                    ])),
+                    html.Tbody([
+                        html.Tr([html.Td("Homicide"),                          html.Td("5,475")]),
+                        html.Tr([html.Td("Rape"),                              html.Td("1,825")]),
+                        html.Tr([html.Td("Death / serious injury — driving"),  html.Td("1,460")]),
+                        html.Tr([html.Td("Violence with injury"),              html.Td("547.5")]),
+                        html.Tr([html.Td("Other sexual offences"),             html.Td("73")]),
+                        html.Tr([html.Td("Stalking and harassment"),           html.Td("10")]),
+                        html.Tr([html.Td("Violence without injury"),           html.Td("1")]),
+                    ]),
+                ], className="cchi-table"),
+                html.P([
+                    html.Span("Subcategorised CCHI: ", className="bold"),
+                    "for each force, multiply each subgroup's offence count "
+                    "by its weight and sum. Forces with a more severe mix ",
+                    "(higher share of homicide or rape relative to ",
+                    "harassment) get a heavier effective weight per violence ",
+                    "offence — e.g. Nottinghamshire 251, Metropolitan Police ",
+                    "210, Dyfed-Powys 168 (national average 205).",
+                ]),
+                html.P([
+                    html.Span("Flat weight: ", className="bold"),
+                    "every violence/sexual record gets the same weight of ",
+                    "182 (the GBH starting point), so the toggle shows what ",
+                    "the picture looks like without subgroup detail.",
+                ]),
+                html.P([
+                    html.Span("Why subgroup-level, not per-offence-code: ", className="bold"),
+                    "CCHI 2020 publishes scores for around 700 individual ",
+                    "offence URN codes, but those URN codes don't ",
+                    "one-to-one join the Home Office offence codes used in ",
+                    "PRC. The seven Offence Subgroup labels do match ",
+                    "cleanly between the two sources, so we use those as ",
+                    "the harm-weighting granularity.",
+                ]),
+                html.P([
+                    html.Span("Source files: ", className="bold"),
+                    "two Home Office Official Statistics open-data tables, ",
+                    "Open Government Licence:",
+                ]),
+                html.Ul([
+                    html.Li([
+                        html.Code("prc-pfa-mar2013-onwards-tables-230426.ods"),
+                        " — Police Recorded Crime, Police Force Area open ",
+                        "data tables. Year ending March 2013 onwards; ",
+                        "released 23 April 2026. The 2024/25 sheet ",
+                        "(25,356 rows) is what the dashboard uses, summed ",
+                        "across Q1–Q4 by force and Offence Subgroup.",
+                    ]),
+                    html.Li([
+                        html.Code("open-data-table-police-workforce-280126.ods"),
+                        " — Police Workforce, England and Wales open data. ",
+                        "Snapshots at 31 March each year, 2007–2025; ",
+                        "released 28 January 2026. The dashboard uses the ",
+                        "31 March 2025 snapshot, ",
+                        html.Code("Worker type = \"Police Officer\""),
+                        ", summed by Force name.",
+                    ]),
+                ], className="source-list"),
+                html.P([
+                    "Both files retrieved from gov.uk; full release pages ",
+                    "and structure notes in ",
+                    html.Code("data/raw/SOURCES.md"),
+                    " in the repository.",
+                ]),
+            ], className="methodology-body"),
+        ], className="methodology"),
     ], className="controls"),
 
     html.Section([
@@ -290,11 +372,20 @@ app.layout = html.Div([
 
     html.Footer([
         html.P([
-            "Mockup ratios for visualisation. Officer FTE figures, crime ",
-            "counts, and the violence subgroup mixes are plausible but not ",
-            "real — they will be replaced with the Home Office PRC tables ",
-            "(Mar 2013 onwards) and Workforce tables once validation is ",
-            "complete.",
+            "Crime counts: Home Office Police Recorded Crime, Police Force ",
+            "Area open data tables (Mar 2013 onwards), released 23 April 2026. ",
+            "Officer FTE: Home Office Police Workforce open data, snapshot ",
+            "31 March 2025, released 28 January 2026. Both reflect the ",
+            "2024/25 financial year for the 43 territorial forces of England ",
+            "and Wales.",
+        ]),
+        html.P([
+            "Harm weights from the Cambridge Crime Harm Index 2020 ",
+            "(Sherman et al). The Sherman formula multiplies count and ",
+            "weight by (1 − resolution rate); the Home Office outcomes ",
+            "table only publishes per-force breakdowns for fraud, so the ",
+            "resolution-rate term is dropped here pending integration of ",
+            "the data.police.uk record-level outcomes pipeline.",
         ]),
         html.P([
             "Boundaries: ONS Open Geography Portal — ",

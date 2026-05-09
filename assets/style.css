@@ -83,6 +83,104 @@ html, body {
     font-weight: 600;
 }
 
+/* ---- Methodology details ---- */
+.methodology {
+    margin: 12px 0 0 0;
+    padding-top: 12px;
+    border-top: 1px solid #eef0f2;
+    color: #555;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.methodology > summary {
+    cursor: pointer;
+    color: #1f3a5f;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 2px 0;
+    list-style: none;
+    user-select: none;
+}
+
+.methodology > summary::-webkit-details-marker { display: none; }
+
+.methodology > summary::before {
+    content: "▶";
+    display: inline-block;
+    font-size: 9px;
+    margin-right: 6px;
+    transform: translateY(-1px);
+    transition: transform 0.15s ease;
+}
+
+.methodology[open] > summary::before {
+    transform: rotate(90deg) translateX(-1px);
+}
+
+.methodology-body {
+    margin-top: 10px;
+    max-width: 980px;
+}
+
+.methodology-body p {
+    margin: 0 0 8px 0;
+}
+
+.methodology-body .bold {
+    color: #1f3a5f;
+    font-weight: 600;
+}
+
+.methodology-body code {
+    background: #eef1f5;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11.5px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    color: #1f3a5f;
+}
+
+.source-list {
+    margin: 4px 0 10px 0;
+    padding-left: 22px;
+}
+
+.source-list li {
+    margin-bottom: 6px;
+}
+
+.cchi-table {
+    border-collapse: collapse;
+    margin: 8px 0 12px 0;
+    font-size: 12px;
+}
+
+.cchi-table th,
+.cchi-table td {
+    padding: 4px 18px 4px 0;
+    text-align: left;
+    border-bottom: 1px solid #eef0f2;
+}
+
+.cchi-table th {
+    color: #777;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid #d8dce0;
+}
+
+.cchi-table td:nth-child(2),
+.cchi-table th:nth-child(2) {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    color: #1f3a5f;
+    text-align: right;
+    padding-right: 0;
+    min-width: 90px;
+}
+
 .control-label {
     font-size: 11px;
     text-transform: uppercase;

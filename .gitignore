@@ -23,7 +23,10 @@ Thumbs.db
 desktop.ini
 
 # Cached GeoJSON (downloaded on first run)
-data/
+data/*.geojson
+
+# Raw Home Office data files — ~15MB; retrieve per data/raw/SOURCES.md
+data/raw/*.ods
 
 # Generated shareable assets (regenerate via `python build_assets.py`)
 exports/
