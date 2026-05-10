@@ -2,19 +2,25 @@
 Police resource allocation dataset.
 
 Builds a per-force DataFrame with officer FTE, recorded crime counts across
-13 broad categories, and harm totals under two violence-weighting scenarios:
+23 PRC Offence Subgroups (rolled up to 13 dashboard categories), and harm
+totals under two CCHI weighting scenarios:
 
-    flat:  every violence/sexual offence given a single weight of 182
-           (the GBH starting point under the Cambridge Crime Harm Index 2020).
+    flat:  per-force harm uses each category's *national-mix* CCHI — for
+           every multi-subgroup category we replace the force's actual
+           subgroup share with the national share. Single-subgroup
+           categories are unaffected.
 
-    sub:   each force's violence/sexual harm uses a force-specific weighted
-           average derived from its own mix across the 7 violence/sexual
-           subgroups, weighted by the representative CCHI score per subgroup.
+    sub:   per-force harm uses each force's own subgroup mix. Forces with
+           a more severe mix (e.g. heavier residential vs non-residential
+           burglary, or higher rape/homicide share within violence) get a
+           heavier effective weight per offence.
 
-Inputs are loaded from the two Home Office open-data ODS files referenced
-in data/raw/SOURCES.md:
-    - prc-pfa-mar2013-onwards-tables-230426.ods
-    - open-data-table-police-workforce-280126.ods
+Inputs:
+    - data/raw/prc-pfa-mar2013-onwards-tables-230426.ods  (PRC counts)
+    - data/raw/open-data-table-police-workforce-280126.ods (officer FTE)
+    - data/raw/Cambridge-CCHI-2026-update.xlsx (CCHI per offence)
+
+Methodology and per-subgroup CCHI provenance: data/raw/CCHI_SOURCES.md.
 
 Two categories the original specification carried have no source in the
 files we use here and are documented as known gaps:
@@ -33,6 +39,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+import cchi_loader
 import prc_loader
 import workforce_loader
 
@@ -69,97 +76,145 @@ CRIME_TYPE_SHORT = {
     "Other crime":                  "Other",
 }
 
-NONVIOLENCE_CCHI = {
-    "Public order":              10,
-    "Criminal damage and arson": 30,
-    "Shoplifting":               5,
-    "Other theft":               10,
-    "Vehicle crime":             10,
-    "Burglary":                  91,
-    "Drugs":                     60,
-    "Theft from the person":     91,
-    "Robbery":                   547,
-    "Possession of weapons":     365,
-    "Bicycle theft":             5,
-    "Other crime":               10,
+# Each dashboard category's constituent PRC Offence Subgroups. The harm
+# pipeline operates at subgroup granularity; the dashboard rolls up to
+# the 13 categories above only for display (radar axes, hover labels).
+SUBGROUPS_BY_CATEGORY: dict[str, list[str]] = {
+    "Violence and sexual offences": [
+        "Homicide", "Violence with injury", "Violence without injury",
+        "Stalking and harassment", "Death or serious injury - unlawful driving",
+        "Rape offences", "Other sexual offences",
+    ],
+    "Public order":              ["Public order offences"],
+    "Criminal damage and arson": ["Criminal damage", "Arson"],
+    "Shoplifting":               ["Shoplifting"],
+    "Other theft":               ["Other theft offences"],
+    "Vehicle crime":             ["Vehicle offences"],
+    "Burglary":                  ["Residential burglary", "Non-residential burglary"],
+    "Drugs":                     ["Possession of drugs", "Trafficking of drugs"],
+    "Theft from the person":     ["Theft from the person"],
+    "Robbery":                   ["Robbery of business property", "Robbery of personal property"],
+    "Possession of weapons":     ["Possession of weapons offences"],
+    "Bicycle theft":             ["Bicycle theft"],
+    "Other crime":               ["Miscellaneous crimes against society"],
 }
 
-FLAT_VIOLENCE_WEIGHT = 182
+# Categories with more than one PRC subgroup — these are where the toggle
+# (national-mix vs per-force mix) actually changes anything.
+MULTI_SUBGROUP_CATEGORIES = [
+    cat for cat, sgs in SUBGROUPS_BY_CATEGORY.items() if len(sgs) > 1
+]
 
-VIOLENCE_SUBGROUPS = {
-    "Homicide":                       5475,
-    "Violence with injury":           547.5,
-    "Violence without injury":        1,
-    "Stalking and harassment":        10,
-    "Death/serious injury - driving": 1460,
-    "Rape":                           1825,
-    "Other sexual offences":          73,
-}
+
+def _category_cchi_under_national_mix(
+    cchi_by_subgroup: dict[str, float],
+    national_volume_by_subgroup: dict[str, int],
+) -> dict[str, float]:
+    """For each dashboard category, the volume-weighted CCHI when the
+    subgroup mix is fixed at the national share. Used for the 'flat'
+    scenario, where forces no longer get credit/penalty for a mix that
+    differs from the country as a whole."""
+    out = {}
+    for cat, sgs in SUBGROUPS_BY_CATEGORY.items():
+        cat_total = sum(national_volume_by_subgroup[sg] for sg in sgs)
+        if cat_total == 0:
+            out[cat] = 0.0
+            continue
+        out[cat] = sum(
+            (national_volume_by_subgroup[sg] / cat_total) * cchi_by_subgroup[sg]
+            for sg in sgs
+        )
+    return out
 
 
 def build_dataset() -> pd.DataFrame:
-    fte_by_force        = workforce_loader.load_force_fte()
-    counts_by_force_cat = prc_loader.load_force_crime_counts()
-    violence_by_force   = prc_loader.load_force_violence_subgroups()
+    fte_by_force       = workforce_loader.load_force_fte()
+    sg_counts_by_force = prc_loader.load_force_subgroup_counts()
+    cchi_by_subgroup   = cchi_loader.load_subgroup_cchi()
 
-    fte_forces       = set(fte_by_force)
-    count_forces     = set(counts_by_force_cat.index)
-    violence_forces  = set(violence_by_force.index)
-    common = fte_forces & count_forces & violence_forces
+    fte_forces   = set(fte_by_force)
+    count_forces = set(sg_counts_by_force.index)
+    common = fte_forces & count_forces
     if len(common) != 43:
         raise ValueError(
-            f"Expected 43 territorial PFAs across all three sources, got {len(common)}. "
-            f"FTE={len(fte_forces)}, counts={len(count_forces)}, violence={len(violence_forces)}."
+            f"Expected 43 territorial PFAs in both sources, got {len(common)}. "
+            f"FTE={len(fte_forces)}, counts={len(count_forces)}."
         )
 
-    counts_categories_set = set(counts_by_force_cat.columns)
-    if counts_categories_set != set(CRIME_TYPES):
-        missing = set(CRIME_TYPES) - counts_categories_set
-        extra   = counts_categories_set - set(CRIME_TYPES)
-        raise ValueError(f"Crime category mismatch. Missing from PRC: {missing}. Extra: {extra}.")
+    expected_subgroups = set()
+    for sgs in SUBGROUPS_BY_CATEGORY.values():
+        expected_subgroups.update(sgs)
+    counts_subgroups = set(sg_counts_by_force.columns)
+    cchi_subgroups   = set(cchi_by_subgroup)
+    if counts_subgroups != expected_subgroups:
+        missing = expected_subgroups - counts_subgroups
+        extra   = counts_subgroups - expected_subgroups
+        raise ValueError(
+            f"PRC subgroup count columns do not match the dashboard taxonomy. "
+            f"Missing from PRC: {missing}. Extra: {extra}."
+        )
+    if cchi_subgroups != expected_subgroups:
+        missing = expected_subgroups - cchi_subgroups
+        extra   = cchi_subgroups - expected_subgroups
+        raise ValueError(
+            f"CCHI lookup does not cover the dashboard taxonomy. "
+            f"Missing CCHI: {missing}. Extra: {extra}."
+        )
 
-    violence_subgroups_set = set(violence_by_force.columns)
-    if violence_subgroups_set != set(VIOLENCE_SUBGROUPS):
-        missing = set(VIOLENCE_SUBGROUPS) - violence_subgroups_set
-        extra   = violence_subgroups_set - set(VIOLENCE_SUBGROUPS)
-        raise ValueError(f"Violence subgroup mismatch. Missing: {missing}. Extra: {extra}.")
+    national_volume = {sg: int(sg_counts_by_force[sg].sum()) for sg in expected_subgroups}
+    cchi_by_cat_natmix = _category_cchi_under_national_mix(cchi_by_subgroup, national_volume)
+
+    violence_sgs = SUBGROUPS_BY_CATEGORY["Violence and sexual offences"]
 
     rows = []
     for force in sorted(common):
-        fte    = fte_by_force[force]
-        counts = {ct: int(counts_by_force_cat.loc[force, ct]) for ct in CRIME_TYPES}
+        fte       = fte_by_force[force]
+        sg_counts = {sg: int(sg_counts_by_force.loc[force, sg]) for sg in expected_subgroups}
 
-        sub_counts = {sg: int(violence_by_force.loc[force, sg]) for sg in VIOLENCE_SUBGROUPS}
-        sub_total  = sum(sub_counts.values())
-        if sub_total == 0:
-            raise ValueError(f"{force}: zero violence/sexual offences in source — unexpected.")
-        violence_mix = {sg: n / sub_total for sg, n in sub_counts.items()}
-        wcchi = sum(violence_mix[sg] * VIOLENCE_SUBGROUPS[sg] for sg in VIOLENCE_SUBGROUPS)
+        # Per-force harm under the per-force-mix scenario: every offence
+        # weighted by its own subgroup's CCHI.
+        harm_sub = sum(sg_counts[sg] * cchi_by_subgroup[sg] for sg in expected_subgroups)
 
-        nonv_harm = sum(
-            counts[ct] * NONVIOLENCE_CCHI[ct]
-            for ct in CRIME_TYPES if ct != "Violence and sexual offences"
-        )
-        v_count     = counts["Violence and sexual offences"]
-        v_harm_flat = v_count * FLAT_VIOLENCE_WEIGHT
-        v_harm_sub  = v_count * wcchi
+        # Per-force harm under the national-mix scenario: each category
+        # carries one national-mix-weighted CCHI; force-specific subgroup
+        # mix has been levelled.
+        category_counts = {
+            cat: sum(sg_counts[sg] for sg in sgs)
+            for cat, sgs in SUBGROUPS_BY_CATEGORY.items()
+        }
+        harm_flat = sum(category_counts[cat] * cchi_by_cat_natmix[cat] for cat in CRIME_TYPES)
 
-        crime_total = sum(counts.values())
+        crime_total = sum(sg_counts.values())
         crime_profile = (
-            {ct: counts[ct] / crime_total for ct in CRIME_TYPES}
+            {cat: category_counts[cat] / crime_total for cat in CRIME_TYPES}
             if crime_total > 0
-            else {ct: 0.0 for ct in CRIME_TYPES}
+            else {cat: 0.0 for cat in CRIME_TYPES}
         )
+
+        # Force's own weighted CCHI for violence — kept for hover continuity
+        # with the previous dashboard. Equivalent metrics for the other
+        # multi-subgroup categories live in subgroup_counts and can be
+        # derived on the fly if the dashboard ever surfaces them.
+        v_total = sum(sg_counts[sg] for sg in violence_sgs)
+        if v_total > 0:
+            weighted_violence_cchi = (
+                sum(sg_counts[sg] * cchi_by_subgroup[sg] for sg in violence_sgs) / v_total
+            )
+            violence_mix = {sg: sg_counts[sg] / v_total for sg in violence_sgs}
+        else:
+            weighted_violence_cchi = 0.0
+            violence_mix = {sg: 0.0 for sg in violence_sgs}
 
         rows.append({
             "force":                  force,
             "officer_fte":            fte,
-            "weighted_violence_cchi": wcchi,
-            "harm_total_flat":        nonv_harm + v_harm_flat,
-            "harm_total_sub":         nonv_harm + v_harm_sub,
+            "weighted_violence_cchi": weighted_violence_cchi,
+            "harm_total_flat":        harm_flat,
+            "harm_total_sub":         harm_sub,
             "crime_profile":          crime_profile,
             "violence_mix":           violence_mix,
-            "crime_counts":           counts,
+            "crime_counts":           category_counts,
+            "subgroup_counts":        sg_counts,
         })
 
     df = pd.DataFrame(rows)
