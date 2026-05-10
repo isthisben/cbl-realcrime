@@ -2,8 +2,9 @@
 Generate shareable static + animated HTML assets from the dashboard data.
 
 Outputs (written to exports/):
-    comparison.html   Side-by-side flat vs subcategorised maps. Same colour
-                      scale, single shared colourbar. Open in browser, then
+    comparison.html   Side-by-side maps: single CCHI per category vs
+                      subgroup-weighted per force. Same colour scale,
+                      single shared colourbar. Open in browser, then
                       screenshot for chat / slides / report.
     animated.html     Single map that toggles between the two scenarios.
                       Has a slider + play button. Drag the slider to flip
@@ -68,8 +69,8 @@ def build_comparison(df, geojson) -> go.Figure:
     fig = make_subplots(
         rows=1, cols=2,
         specs=[[{"type": "geo"}, {"type": "geo"}]],
-        subplot_titles=("<b>Flat weight (182)</b>",
-                        "<b>Subcategorised CCHI</b>"),
+        subplot_titles=("<b>Single CCHI per category</b>",
+                        "<b>Subgroup-weighted per force</b>"),
         horizontal_spacing=0.02,
     )
 
@@ -116,8 +117,8 @@ def build_comparison(df, geojson) -> go.Figure:
 
     fig.update_layout(
         title=dict(
-            text=("<b>Allocation gap by force — flat vs subcategorised "
-                  "weighting</b><br>"
+            text=("<b>Allocation gap by force — single CCHI vs "
+                  "subgroup-weighted</b><br>"
                   "<span style='font-size:12px;color:#555'>"
                   "gap = officer share % − harm share %  ·  "
                   "<span style='color:#1a9850;font-weight:600'>green</span> "
@@ -135,9 +136,12 @@ def build_comparison(df, geojson) -> go.Figure:
             *fig.layout.annotations,
             dict(
                 text=("Same colour scale across both maps, capped at ±3 pp. "
-                      "The Met saturates at full red under subcategorised "
-                      "(true gap ≈ −12 pp) — hover any force for actual values. "
-                      "<i>Mockup data.</i>"),
+                      "The Metropolitan Police saturates at full green under "
+                      "the per-force-mix scenario (true gap ≈ +7.2 pp) — "
+                      "hover any force for actual values. "
+                      "<i>Crime counts: Home Office PRC 2024/25. "
+                      "Officer FTE: Home Office Workforce 31 March 2025. "
+                      "Harm weights: Cambridge CCHI 2026.</i>"),
                 x=0.5, y=-0.06,
                 xref="paper", yref="paper",
                 xanchor="center", yanchor="top",
@@ -184,14 +188,14 @@ def build_animated(df, geojson) -> go.Figure:
         name="flat",
         data=[go.Choropleth(z=df["allocation_gap_flat"],
                             customdata=flat_custom, **common)],
-        layout=go.Layout(title=dict(text=title_for("Weighting: flat (182)"),
+        layout=go.Layout(title=dict(text=title_for("Weighting: single CCHI per category"),
                                     x=0.5, xanchor="center", y=0.96)),
     )
     frame_sub = go.Frame(
         name="sub",
         data=[go.Choropleth(z=df["allocation_gap_sub"],
                             customdata=sub_custom, **common)],
-        layout=go.Layout(title=dict(text=title_for("Weighting: subcategorised CCHI"),
+        layout=go.Layout(title=dict(text=title_for("Weighting: subgroup-weighted per force"),
                                     x=0.5, xanchor="center", y=0.96)),
     )
 
@@ -215,7 +219,7 @@ def build_animated(df, geojson) -> go.Figure:
         data=[initial],
         frames=[frame_flat, frame_sub],
         layout=go.Layout(
-            title=dict(text=title_for("Weighting: flat (182)"),
+            title=dict(text=title_for("Weighting: single CCHI per category"),
                        x=0.5, xanchor="center", y=0.96),
             margin=dict(l=10, r=20, t=110, b=120),
             paper_bgcolor="#ffffff",
@@ -246,16 +250,17 @@ def build_animated(df, geojson) -> go.Figure:
                 pad=dict(t=4, b=10),
                 currentvalue=dict(prefix="", font=dict(size=12, color="#1f3a5f")),
                 steps=[
-                    dict(label="Flat (182)", method="animate",
+                    dict(label="Single CCHI per category", method="animate",
                          args=[["flat"], slider_args()]),
-                    dict(label="Subcategorised CCHI", method="animate",
+                    dict(label="Subgroup-weighted per force", method="animate",
                          args=[["sub"], slider_args()]),
                 ],
             )],
             annotations=[dict(
                 text=("gap = officer share % − harm share %  ·  "
                       "drag the slider or hit play to flip between weightings  ·  "
-                      "<i>mockup data</i>"),
+                      "<i>Home Office PRC 2024/25 + Workforce 31 Mar 2025 + "
+                      "Cambridge CCHI 2026</i>"),
                 x=0.5, y=-0.18, xref="paper", yref="paper",
                 xanchor="center", showarrow=False,
                 font=dict(size=11, color="#777"),
