@@ -34,3 +34,7 @@ exports/
 # Local notes
 notes.md
 TODO.md
+
+# Local agent / editor scaffolding
+.claude/
+CLAUDE.md
