@@ -151,18 +151,34 @@ For each force F, harm is summed at the subgroup level:
 harm_F = Σ_subgroup (count_{F,subgroup} × CCHI_subgroup)
 ```
 
-The dashboard reports two scenarios:
+`CCHI_subgroup` is built in two aggregation layers, each using the rule
+that the available data supports:
 
-- **Subgroup-weighted per force**: each force's subgroup mix is its
-  actual mix from PRC. A force with a heavier residential-burglary share
+1. **Sherman URN → PRC subgroup — median.** Sherman 2026 publishes
+   scores at offence-code (ATHENA URN) level. PRC publishes counts at
+   subgroup level only, so URN-level volume weighting is not possible.
+   Each PRC subgroup's CCHI is therefore the median of all Sherman
+   entries that map to it — robust to rare-but-severe offences
+   (firearms within Possession of weapons; GBH-with-intent within
+   Violence with injury) that would otherwise pull a mean far above the
+   typical reported offence.
+2. **PRC subgroup → dashboard category — volume-weighted average.**
+   Eight of the 13 dashboard categories contain a single PRC subgroup;
+   their category CCHI is just the subgroup median. The other five
+   (Violence and sexual offences, Burglary, Drugs, Robbery, Criminal
+   damage and arson) take a volume-weighted average of their subgroup
+   medians, with PRC counts as the weights. The toggle picks which
+   counts:
+
+- **Subgroup-weighted per force**: weights are each force's own
+  subgroup counts. A force with a heavier residential-burglary share
   scores higher per offence in the Burglary category than a force whose
   burglary mix tilts non-residential.
-- **Single CCHI per category**: each force's category mix is replaced
-  with the national mix. One nationally-derived CCHI per category,
-  applied identically to every force. This isolates the effect of crime
-  *volume* alone (forces are no longer rewarded or penalised for
-  category mix). The toggle only changes anything for the five
-  multi-subgroup categories.
+- **Single CCHI per category**: weights are the national subgroup
+  counts. One nationally-derived CCHI per category, applied identically
+  to every force. This isolates the effect of crime *volume* alone
+  (forces are no longer rewarded or penalised for category mix). The
+  toggle only changes anything for the five multi-subgroup categories.
 
 The allocation gap (officer share % − harm share %) is positive when a
 force has more officers than harm suggests is needed, negative when it
