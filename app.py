@@ -5,7 +5,7 @@ TU/e 4CBLW020 — Real-World Crime project
 Three components:
   1. Choropleth map of allocation gap (officer share - harm share) per force
   2. Radar chart: crime profile of selected force vs national average
-  3. Toggle: flat 182 violence weight vs subcategorised CCHI per force
+  3. Toggle: single CCHI per category vs subgroup-weighted per force
 
 Run with:  python app.py
 Then open: http://127.0.0.1:8050
@@ -45,11 +45,12 @@ def build_map(scenario: str, selected_force: str | None) -> go.Figure:
     gap_col = f"allocation_gap_{scenario}"
     harm_col = f"harm_share_pct_{scenario}"
 
-    # Cap the colour scale at ±3 percentage points. The Met sits around
-    # -12pp under the subcategorised scenario and would otherwise dominate
-    # the scale, leaving every other force looking nearly white. With a
-    # tighter cap the Met saturates at full red and the rest of the country
-    # shows a useful gradient. The hover always shows the true value.
+    # Cap the colour scale at ±3 percentage points. The Metropolitan Police
+    # sits around +7pp under the per-force-mix scenario and would otherwise
+    # dominate the scale, leaving every other force looking nearly white.
+    # With a tighter cap the Met saturates at full green and the rest of
+    # the country shows a useful gradient. The hover always shows the true
+    # value.
     cmax = 3.0
 
     custom = list(zip(
@@ -58,7 +59,6 @@ def build_map(scenario: str, selected_force: str | None) -> go.Figure:
         DF[harm_col].round(2),
         DF[gap_col].round(2),
         DF["officer_fte"],
-        DF["weighted_violence_cchi"].round(0),
     ))
 
     fig = go.Figure(go.Choropleth(
@@ -87,8 +87,7 @@ def build_map(scenario: str, selected_force: str | None) -> go.Figure:
             "Officers: %{customdata[4]:,} FTE<br>"
             "Officer share: %{customdata[1]}%<br>"
             "Harm share: %{customdata[2]}%<br>"
-            "Allocation gap: %{customdata[3]:+.2f} pp<br>"
-            "Weighted violence CCHI: %{customdata[5]}"
+            "Allocation gap: %{customdata[3]:+.2f} pp"
             "<extra></extra>"
         ),
     ))
@@ -131,15 +130,19 @@ def build_radar(force_name: str) -> go.Figure:
     row = DF[DF["force"] == force_name].iloc[0]
     profile = row["crime_profile"]
 
-    # Ratios vs national average. Clipped at 2.5 so a single outlier axis
-    # doesn't squash the polygon for everything else.
+    # Ratios vs national average. The polygon radius is clipped at 2.5 so a
+    # single outlier axis doesn't squash the polygon for everything else; the
+    # hover always shows the true unclipped ratio.
     theta = [data.CRIME_TYPE_SHORT[ct] for ct in data.CRIME_TYPES]
-    ratios = [min(profile[ct] / NATIONAL_PROFILE[ct], 2.5) for ct in data.CRIME_TYPES]
+    raw_ratios = [profile[ct] / NATIONAL_PROFILE[ct] if NATIONAL_PROFILE[ct] > 0 else 0.0
+                  for ct in data.CRIME_TYPES]
+    ratios = [min(r, 2.5) for r in raw_ratios]
 
     # Close both polygons by repeating the first point
-    theta_closed  = theta + [theta[0]]
-    ratios_closed = ratios + [ratios[0]]
-    nat_closed    = [1.0] * (len(theta) + 1)
+    theta_closed   = theta + [theta[0]]
+    ratios_closed  = ratios + [ratios[0]]
+    raw_closed     = raw_ratios + [raw_ratios[0]]
+    nat_closed     = [1.0] * (len(theta) + 1)
 
     fig = go.Figure()
 
@@ -157,13 +160,14 @@ def build_radar(force_name: str) -> go.Figure:
     fig.add_trace(go.Scatterpolar(
         r=ratios_closed,
         theta=theta_closed,
+        customdata=raw_closed,
         name=force_name,
         mode="lines+markers",
         line=dict(color="#1f3a5f", width=2),
         marker=dict(size=5, color="#1f3a5f"),
         fill="toself",
         fillcolor="rgba(31,58,95,0.25)",
-        hovertemplate="<b>%{theta}</b><br>%{r:.2f}× national<extra></extra>",
+        hovertemplate="<b>%{theta}</b><br>%{customdata:.2f}× national<extra></extra>",
     ))
 
     fig.update_layout(
@@ -218,12 +222,12 @@ app.layout = html.Div([
     html.Section([
         html.Div([
             html.Div([
-                html.Label("Violence weighting", className="control-label"),
+                html.Label("CCHI weighting", className="control-label"),
                 dcc.RadioItems(
                     id="scenario-toggle",
                     options=[
-                        {"label": "Flat weight (182)",     "value": "flat"},
-                        {"label": "Subcategorised CCHI",   "value": "sub"},
+                        {"label": "Single CCHI per category",     "value": "flat"},
+                        {"label": "Subgroup-weighted per force",  "value": "sub"},
                     ],
                     value="sub",
                     className="scenario-radio",
@@ -244,69 +248,101 @@ app.layout = html.Div([
         ], className="control-row"),
 
         html.P([
-            html.Span("Flat weight (182): ", className="bold"),
-            "every violence/sexual offence record is given the same score "
-            "(roughly the GBH starting point), regardless of whether the actual "
-            "offence was a common assault or a murder. ",
-            html.Span("Subcategorised CCHI: ", className="bold"),
-            "each force gets its own weighted-average CCHI based on the actual "
-            "mix of offences inside its violence/sexual category — common assault, "
-            "GBH, rape, homicide, etc. Forces with a more severe mix score higher.",
+            html.Span("Single CCHI per category: ", className="bold"),
+            "every force is treated as having the national mix of subgroups "
+            "within each category. One nationally-derived CCHI per category, "
+            "applied identically to every force. ",
+            html.Span("Subgroup-weighted per force: ", className="bold"),
+            "each force's CCHI per category reflects that force's own mix of "
+            "PRC Offence Subgroups — residential vs non-residential burglary, "
+            "common assault vs GBH, possession vs trafficking, and so on. "
+            "Forces with a more severe within-category mix score higher.",
         ], className="toggle-explainer"),
 
         html.Details([
             html.Summary("How the harm score is calculated"),
             html.Div([
                 html.P([
-                    "Per force, harm = Σ (count × weight) across the 13 ",
-                    "Home Office crime categories. The Violence and sexual ",
-                    "offences category is split internally into the seven ",
-                    "PRC offence subgroups, each carrying its own Cambridge ",
-                    "Crime Harm Index 2020 weight (Sherman et al.):",
+                    "Per force, harm = Σ (count × CCHI) across the 23 PRC ",
+                    "Offence Subgroups in scope. Each subgroup carries one ",
+                    "CCHI value (in days), taken as the median of all ",
+                    "Cambridge Crime Harm Index 2026 entries that fall under ",
+                    "that subgroup. The 23 subgroups roll up to the 13 ",
+                    "dashboard categories used on the radar."
+                ]),
+                html.P([
+                    html.Span("Multi-subgroup categories. ", className="bold"),
+                    "Five of the 13 categories have more than one PRC ",
+                    "subgroup. These are where the toggle changes the picture:"
                 ]),
                 html.Table([
                     html.Thead(html.Tr([
-                        html.Th("Subgroup (PRC Offence Subgroup)"),
-                        html.Th("CCHI weight"),
+                        html.Th("Category"),
+                        html.Th("Subgroup"),
+                        html.Th("CCHI (days)"),
                     ])),
                     html.Tbody([
-                        html.Tr([html.Td("Homicide"),                          html.Td("5,475")]),
-                        html.Tr([html.Td("Rape"),                              html.Td("1,825")]),
-                        html.Tr([html.Td("Death / serious injury — driving"),  html.Td("1,460")]),
-                        html.Tr([html.Td("Violence with injury"),              html.Td("547.5")]),
-                        html.Tr([html.Td("Other sexual offences"),             html.Td("73")]),
-                        html.Tr([html.Td("Stalking and harassment"),           html.Td("10")]),
-                        html.Tr([html.Td("Violence without injury"),           html.Td("1")]),
+                        html.Tr([html.Td("Violence and sexual offences"), html.Td("Homicide"),                                   html.Td("5,475")]),
+                        html.Tr([html.Td(""),                              html.Td("Rape offences"),                              html.Td("2,555")]),
+                        html.Tr([html.Td(""),                              html.Td("Other sexual offences"),                      html.Td("182.25")]),
+                        html.Tr([html.Td(""),                              html.Td("Violence with injury"),                       html.Td("365")]),
+                        html.Tr([html.Td(""),                              html.Td("Death/serious injury — unlawful driving"),    html.Td("365")]),
+                        html.Tr([html.Td(""),                              html.Td("Violence without injury"),                    html.Td("10")]),
+                        html.Tr([html.Td(""),                              html.Td("Stalking and harassment"),                    html.Td("10")]),
+                        html.Tr([html.Td("Burglary"),                      html.Td("Residential burglary"),                       html.Td("273.5")]),
+                        html.Tr([html.Td(""),                              html.Td("Non-residential burglary"),                   html.Td("183.5")]),
+                        html.Tr([html.Td("Criminal damage and arson"),     html.Td("Arson"),                                      html.Td("185")]),
+                        html.Tr([html.Td(""),                              html.Td("Criminal damage"),                            html.Td("2")]),
+                        html.Tr([html.Td("Drugs"),                         html.Td("Trafficking of drugs"),                       html.Td("5")]),
+                        html.Tr([html.Td(""),                              html.Td("Possession of drugs"),                        html.Td("3")]),
+                        html.Tr([html.Td("Robbery"),                       html.Td("Robbery of business property"),               html.Td("365")]),
+                        html.Tr([html.Td(""),                              html.Td("Robbery of personal property"),               html.Td("365")]),
                     ]),
                 ], className="cchi-table"),
                 html.P([
-                    html.Span("Subcategorised CCHI: ", className="bold"),
-                    "for each force, multiply each subgroup's offence count "
-                    "by its weight and sum. Forces with a more severe mix ",
-                    "(higher share of homicide or rape relative to ",
-                    "harassment) get a heavier effective weight per violence ",
-                    "offence — e.g. Nottinghamshire 251, Metropolitan Police ",
-                    "210, Dyfed-Powys 168 (national average 205).",
+                    html.Span("Single-subgroup categories. ", className="bold"),
+                    "The remaining eight categories each contain one PRC ",
+                    "subgroup; the subgroup CCHI is the category CCHI and ",
+                    "the toggle has no effect on them. Possession of weapons "
+                    "273.75, Public order 7.5, Vehicle crime 5, Other theft "
+                    "2, Theft from the person 2, Bicycle theft 2, Shoplifting "
+                    "1, Other crime 10."
                 ]),
                 html.P([
-                    html.Span("Flat weight: ", className="bold"),
-                    "every violence/sexual record gets the same weight of ",
-                    "182 (the GBH starting point), so the toggle shows what ",
-                    "the picture looks like without subgroup detail.",
+                    html.Span("Subgroup-weighted per force: ", className="bold"),
+                    "for every multi-subgroup category, each force's effective ",
+                    "category CCHI is the volume-weighted average of its ",
+                    "subgroup CCHIs, using that force's actual subgroup share. "
+                    "A force with more residential burglaries scores higher ",
+                    "per offence in Burglary than a force whose burglary mix ",
+                    "is mostly non-residential."
+                ]),
+                html.P([
+                    html.Span("Single CCHI per category: ", className="bold"),
+                    "the volume-weighted average is computed once nationally ",
+                    "and applied identically to every force, removing the ",
+                    "effect of force-level mix. The toggle compares the two: ",
+                    "forces whose mix is more severe than the national average ",
+                    "show a larger negative gap under the per-force-mix view ",
+                    "than under the single-CCHI view."
                 ]),
                 html.P([
                     html.Span("Why subgroup-level, not per-offence-code: ", className="bold"),
-                    "CCHI 2020 publishes scores for around 700 individual ",
-                    "offence URN codes, but those URN codes don't ",
-                    "one-to-one join the Home Office offence codes used in ",
-                    "PRC. The seven Offence Subgroup labels do match ",
-                    "cleanly between the two sources, so we use those as ",
-                    "the harm-weighting granularity.",
+                    "Sherman 2026 publishes CCHI scores at the offence-code ",
+                    "(ATHENA URN) level, but the Police Recorded Crime PFA ",
+                    "tables only publish counts at the Offence Subgroup level. "
+                    "Subgroup is therefore the finest joinable granularity. ",
+                    "The subgroup CCHI is the median across all Sherman URNs ",
+                    "in that subgroup; choice of median over mean is robust ",
+                    "to rare-but-severe offences (firearms within Possession ",
+                    "of weapons, GBH-with-intent within Violence with injury) ",
+                    "whose CCHIs would otherwise pull the mean far above the "
+                    "typical reported offence."
                 ]),
                 html.P([
                     html.Span("Source files: ", className="bold"),
-                    "two Home Office Official Statistics open-data tables, ",
-                    "Open Government Licence:",
+                    "three open-data tables, Open Government Licence ",
+                    "(Home Office) and Creative Commons (Cambridge):"
                 ]),
                 html.Ul([
                     html.Li([
@@ -315,7 +351,7 @@ app.layout = html.Div([
                         "data tables. Year ending March 2013 onwards; ",
                         "released 23 April 2026. The 2024/25 sheet ",
                         "(25,356 rows) is what the dashboard uses, summed ",
-                        "across Q1–Q4 by force and Offence Subgroup.",
+                        "across Q1–Q4 by force and Offence Subgroup."
                     ]),
                     html.Li([
                         html.Code("open-data-table-police-workforce-280126.ods"),
@@ -324,14 +360,24 @@ app.layout = html.Div([
                         "released 28 January 2026. The dashboard uses the ",
                         "31 March 2025 snapshot, ",
                         html.Code("Worker type = \"Police Officer\""),
-                        ", summed by Force name.",
+                        ", summed by Force name."
+                    ]),
+                    html.Li([
+                        html.Code("Cambridge-CCHI-2026-update.xlsx"),
+                        " — Cambridge Crime Harm Index, 2026 update. ",
+                        "1,266 rows in the values sheet covering 786 ",
+                        "distinct Home Office offence classifications. ",
+                        "Cambridge Centre for Evidence-Based Policing, ",
+                        "Institute of Criminology."
                     ]),
                 ], className="source-list"),
                 html.P([
-                    "Both files retrieved from gov.uk; full release pages ",
-                    "and structure notes in ",
+                    "Provenance for every CCHI value, sensitivity check ",
+                    "against the mean, and documented limitations live in ",
+                    html.Code("data/raw/CCHI_SOURCES.md"),
+                    ". Full release pages and licensing in ",
                     html.Code("data/raw/SOURCES.md"),
-                    " in the repository.",
+                    "."
                 ]),
             ], className="methodology-body"),
         ], className="methodology"),
@@ -380,12 +426,15 @@ app.layout = html.Div([
             "and Wales.",
         ]),
         html.P([
-            "Harm weights from the Cambridge Crime Harm Index 2020 ",
-            "(Sherman et al). The Sherman formula multiplies count and ",
-            "weight by (1 − resolution rate); the Home Office outcomes ",
-            "table only publishes per-force breakdowns for fraud, so the ",
-            "resolution-rate term is dropped here pending integration of ",
-            "the data.police.uk record-level outcomes pipeline.",
+            "Harm weights: Cambridge Crime Harm Index, 2026 update ",
+            "(Sherman, Neyroud, Neyroud — Cambridge Centre for Evidence-Based ",
+            "Policing). One CCHI value per PRC Offence Subgroup, taken as the ",
+            "median of all Sherman 2026 entries in that subgroup. The Sherman ",
+            "formula multiplies count and weight by (1 − resolution rate); ",
+            "the Home Office outcomes table only publishes per-force ",
+            "breakdowns for fraud, so the resolution-rate term is dropped ",
+            "here pending integration of the data.police.uk record-level ",
+            "outcomes pipeline.",
         ]),
         html.P([
             "Boundaries: ONS Open Geography Portal — ",

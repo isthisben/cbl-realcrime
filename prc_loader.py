@@ -1,12 +1,13 @@
 """
 Reads the Home Office Police Recorded Crime PFA open data table and returns
-per-force counts grouped two ways:
+per-force counts at PRC Offence Subgroup granularity:
 
-    load_force_crime_counts(year)
-        force x 13 dashboard categories  ->  count
+    load_force_subgroup_counts(year)
+        force x 23 PRC Offence Subgroups  ->  count
 
-    load_force_violence_subgroups(year)
-        force x 7 violence/sexual subgroups  ->  count
+This is the granularity the harm pipeline operates at — every CCHI weight
+is assigned per subgroup. Roll-ups to the 13 dashboard categories happen
+in `data.py` via `SUBGROUPS_BY_CATEGORY`.
 
 Forces that are not territorial PFAs (British Transport Police and the three
 fraud-reporting bodies) are filtered out. Force names are normalised to the
@@ -44,7 +45,9 @@ FORCE_NAME_FIXES = {
 # dashboard categories. Anti-social behaviour is not in PRC and is omitted.
 # When the burglary subdivision changed in 2017 the older subgroup names
 # were retained for back-series consistency, so both old and new names are
-# mapped here to keep the loader resilient across years.
+# mapped here to keep the loader resilient across years; the load function
+# drops any subgroup whose 2024/25 count is zero, so the legacy names fall
+# out cleanly without further bookkeeping.
 SUBGROUP_TO_CATEGORY = {
     "Homicide":                                   "Violence and sexual offences",
     "Violence with injury":                       "Violence and sexual offences",
@@ -74,17 +77,6 @@ SUBGROUP_TO_CATEGORY = {
     "Fraud: Action Fraud":                        "Other crime",
     "Fraud: CIFAS":                               "Other crime",
     "Fraud: UK Finance":                          "Other crime",
-}
-
-# Subgroup name in PRC -> subgroup name in data.VIOLENCE_SUBGROUPS.
-SUBGROUP_TO_VIOLENCE_KEY = {
-    "Homicide":                                   "Homicide",
-    "Violence with injury":                       "Violence with injury",
-    "Violence without injury":                    "Violence without injury",
-    "Stalking and harassment":                    "Stalking and harassment",
-    "Death or serious injury - unlawful driving": "Death/serious injury - driving",
-    "Rape offences":                              "Rape",
-    "Other sexual offences":                      "Other sexual offences",
 }
 
 
@@ -119,7 +111,13 @@ def _read_year(year_sheet: str) -> pd.DataFrame:
     return df
 
 
-def load_force_crime_counts(year_sheet: str = DEFAULT_YEAR_SHEET) -> pd.DataFrame:
+def load_force_subgroup_counts(year_sheet: str = DEFAULT_YEAR_SHEET) -> pd.DataFrame:
+    """Force x PRC Offence Subgroup counts. Subgroups whose only rows are
+    filtered out at the force-name step (Action Fraud / CIFAS / UK Finance
+    fraud bookkeeping) are dropped. Pre-2017 burglary subgroups (Domestic /
+    Non-domestic) are also dropped here because they carry zero counts in
+    2024/25 — the active labels in scope are Residential / Non-residential.
+    """
     df = _read_year(year_sheet)
 
     df = df.assign(category=df["Offence Subgroup"].map(SUBGROUP_TO_CATEGORY))
@@ -131,26 +129,11 @@ def load_force_crime_counts(year_sheet: str = DEFAULT_YEAR_SHEET) -> pd.DataFram
         )
 
     counts = (
-        df.groupby(["Force Name", "category"])["Number of Offences"]
+        df.groupby(["Force Name", "Offence Subgroup"])["Number of Offences"]
           .sum()
           .unstack(fill_value=0)
     )
-    counts.index.name = "force"
-    counts.columns.name = None
-    return counts
-
-
-def load_force_violence_subgroups(year_sheet: str = DEFAULT_YEAR_SHEET) -> pd.DataFrame:
-    df = _read_year(year_sheet)
-
-    violence = df[df["Offence Subgroup"].isin(SUBGROUP_TO_VIOLENCE_KEY)].copy()
-    violence["subgroup"] = violence["Offence Subgroup"].map(SUBGROUP_TO_VIOLENCE_KEY)
-
-    counts = (
-        violence.groupby(["Force Name", "subgroup"])["Number of Offences"]
-                .sum()
-                .unstack(fill_value=0)
-    )
+    counts = counts.loc[:, (counts.sum(axis=0) > 0)]
     counts.index.name = "force"
     counts.columns.name = None
     return counts
