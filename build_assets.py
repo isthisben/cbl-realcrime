@@ -43,8 +43,7 @@ HOVER = (
     "Officers: %{customdata[4]:,} FTE<br>"
     "Officer share: %{customdata[1]}%<br>"
     "Harm share: %{customdata[2]}%<br>"
-    "Allocation gap: %{customdata[3]:+.2f} pp<br>"
-    "Weighted violence CCHI: %{customdata[5]}"
+    "Allocation gap: %{customdata[3]:+.2f} pp"
     "<extra></extra>"
 )
 
@@ -56,7 +55,6 @@ def _customdata(df, gap_col, harm_col):
         df[harm_col].round(2),
         df[gap_col].round(2),
         df["officer_fte"],
-        df["weighted_violence_cchi"].round(0),
     ))
 
 
@@ -137,7 +135,7 @@ def build_comparison(df, geojson) -> go.Figure:
             dict(
                 text=("Same colour scale across both maps, capped at ±3 pp. "
                       "The Metropolitan Police saturates at full green under "
-                      "the per-force-mix scenario (true gap ≈ +7.2 pp) — "
+                      "the per-force-mix scenario (true gap ≈ +7.4 pp) — "
                       "hover any force for actual values. "
                       "<i>Crime counts: Home Office PRC 2024/25. "
                       "Officer FTE: Home Office Workforce 31 March 2025. "

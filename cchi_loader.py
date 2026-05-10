@@ -119,6 +119,14 @@ def _load_values_sheet() -> pd.DataFrame:
 
     df["CCHI Score"] = pd.to_numeric(df["CCHI Score"], errors="coerce")
     df = df.dropna(subset=["CCHI Score"]).copy()
+
+    # A handful of rows in the values sheet are flagged EXPIRED in the title
+    # (Home Office classifications retired before the 2024/25 PRC reporting
+    # period). The corresponding offence codes do not appear in the PRC data,
+    # so their CCHI scores should not influence the median for the active
+    # codes that do. Drop them.
+    title = df["FULL_OFFENCE_TITLE"].astype(str).str.lower()
+    df = df[~title.str.contains("expired", na=False)].copy()
     return df
 
 
@@ -127,7 +135,8 @@ def _driving_death_rows(df: pd.DataFrame) -> pd.DataFrame:
     dedicated Sherman SUB_GROUP. The matching offences live under
     GROUP = 'VIOLENCE AGAINST THE PERSON' (or, for a few rows, missing GROUP)
     with FULL_OFFENCE_TITLE describing causing death or serious injury by
-    driving. We match by title pattern."""
+    driving. We match by title pattern. Expired rows are already dropped by
+    `_load_values_sheet`."""
     title = df["FULL_OFFENCE_TITLE"].astype(str).str.lower()
     is_outcome = (
         title.str.contains("death by", na=False)
@@ -138,8 +147,7 @@ def _driving_death_rows(df: pd.DataFrame) -> pd.DataFrame:
         title.str.contains("driv", na=False)
         | title.str.contains("vehicle", na=False)
     )
-    is_expired = title.str.contains("expired", na=False)
-    return df[is_outcome & is_driving & ~is_expired]
+    return df[is_outcome & is_driving]
 
 
 def load_subgroup_cchi() -> dict[str, float]:

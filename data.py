@@ -164,8 +164,6 @@ def build_dataset() -> pd.DataFrame:
     national_volume = {sg: int(sg_counts_by_force[sg].sum()) for sg in expected_subgroups}
     cchi_by_cat_natmix = _category_cchi_under_national_mix(cchi_by_subgroup, national_volume)
 
-    violence_sgs = SUBGROUPS_BY_CATEGORY["Violence and sexual offences"]
-
     rows = []
     for force in sorted(common):
         fte       = fte_by_force[force]
@@ -191,30 +189,14 @@ def build_dataset() -> pd.DataFrame:
             else {cat: 0.0 for cat in CRIME_TYPES}
         )
 
-        # Force's own weighted CCHI for violence — kept for hover continuity
-        # with the previous dashboard. Equivalent metrics for the other
-        # multi-subgroup categories live in subgroup_counts and can be
-        # derived on the fly if the dashboard ever surfaces them.
-        v_total = sum(sg_counts[sg] for sg in violence_sgs)
-        if v_total > 0:
-            weighted_violence_cchi = (
-                sum(sg_counts[sg] * cchi_by_subgroup[sg] for sg in violence_sgs) / v_total
-            )
-            violence_mix = {sg: sg_counts[sg] / v_total for sg in violence_sgs}
-        else:
-            weighted_violence_cchi = 0.0
-            violence_mix = {sg: 0.0 for sg in violence_sgs}
-
         rows.append({
-            "force":                  force,
-            "officer_fte":            fte,
-            "weighted_violence_cchi": weighted_violence_cchi,
-            "harm_total_flat":        harm_flat,
-            "harm_total_sub":         harm_sub,
-            "crime_profile":          crime_profile,
-            "violence_mix":           violence_mix,
-            "crime_counts":           category_counts,
-            "subgroup_counts":        sg_counts,
+            "force":           force,
+            "officer_fte":     fte,
+            "harm_total_flat": harm_flat,
+            "harm_total_sub":  harm_sub,
+            "crime_profile":   crime_profile,
+            "crime_counts":    category_counts,
+            "subgroup_counts": sg_counts,
         })
 
     df = pd.DataFrame(rows)

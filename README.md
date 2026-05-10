@@ -105,12 +105,18 @@ traces back to one of three open-data spreadsheets through the loaders.
    `Hampshire and Isle of Wight` → `Hampshire`, and sums Total (FTE) by
    force. Returns a dict.
 3. **Load CCHI per subgroup** — `cchi_loader.load_subgroup_cchi()`.
-   Reads `CCHI 2026 values sheet` from the Cambridge XLSX, applies the
-   PRC → Sherman SUB_GROUP mapping (14 exact label matches, 9 resolved
-   by pooling multiple Sherman labels, by trailing-word renames, or by
-   `FULL_OFFENCE_TITLE` pattern for the Death/driving subgroup), and
-   returns the median CCHI per PRC subgroup. Expired-flagged rows in
-   the values sheet are filtered out.
+   Reads `CCHI 2026 values sheet` from the Cambridge XLSX, drops rows
+   whose `FULL_OFFENCE_TITLE` is flagged `EXPIRED` (six retired offence
+   codes with cutoffs spanning 31/03/17 to 31/03/25 — they no longer
+   appear in the PRC tables and so should not be allowed to weight the
+   active codes), and applies the PRC → Sherman SUB_GROUP mapping.
+   Fourteen of the twenty-three PRC subgroups match a Sherman
+   SUB_GROUP exactly; the remaining nine are resolved by pooling 2–4
+   Sherman labels (Residential burglary, Public order, Vehicle), by
+   label renames (trailing `offences` dropped, `BURGLARY - BUSINESS
+   AND COMMUNITY`, `MISC` abbreviation), or by `FULL_OFFENCE_TITLE`
+   pattern (Death/driving — no dedicated Sherman SUB_GROUP). Returns
+   the median CCHI per PRC subgroup.
 4. **Build the per-force dataset** — `data.build_dataset()`.
    For each of the 43 territorial forces, computes harm under both
    scenarios (sum of count × CCHI, with subgroup mix either per-force

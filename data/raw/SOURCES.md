@@ -55,8 +55,8 @@ Cambridge Crime Harm Index, 2026 update.
 Four sheets. The dashboard reads only `CCHI 2026 values sheet`.
 
 `CCHI 2026 values sheet` (1,266 rows × 18 substantive columns + CJS code
-spillover): per-offence harm scores covering ~700 distinct offences and
-their classification variants. Columns used: ATHENA URN,
+spillover): per-offence harm scores covering 786 distinct Home Office
+classifications and 1,174 ATHENA URN codes. Columns used: ATHENA URN,
 FULL_OFFENCE_TITLE, CCHI Score, Starting Point, GROUP, SUB_GROUP,
 SUB_SUB_GROUP, HOME_OFFICE_CLASSIFICATION, HO_CODE, HO_SUB_CODE,
 HO_SUB_SUB_CODE.

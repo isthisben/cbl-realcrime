@@ -12,8 +12,9 @@ Evidence-Based Policing, Institute of Criminology, University of
 Cambridge.
 
 - File: `data/raw/Cambridge-CCHI-2026-update.xlsx`
-- Sheet read: `CCHI 2026 values sheet` (1,266 rows, ~700 distinct offences
-  across England & Wales criminal-justice and Home Office classifications)
+- Sheet read: `CCHI 2026 values sheet` (1,266 rows covering 786 distinct
+  Home Office offence classifications and 1,174 ATHENA URN codes; six
+  EXPIRED rows are dropped at load time, see Coverage notes below)
 - Foundational paper: Sherman, L., Neyroud, P., Neyroud, E. (2016). *The
   Cambridge Crime Harm Index: Measuring Total Harm from Crime Based on
   Sentencing Guidelines.* Policing 10(3): 171–183.
@@ -67,12 +68,12 @@ median (column 4).
 |--------------------------------------------|------------------------------------------------------------------------------------------------------|----:|-----:|---:|--------:|-------:|
 | Homicide                                   | HOMICIDE                                                                                             |   3 |  730 | **5,475** | 3,893.3 |  5,475 |
 | Violence with injury                       | VIOLENCE WITH INJURY                                                                                 |  73 |    2 |   **365** |   943.5 |  4,380 |
-| Violence without injury                    | VIOLENCE WITHOUT INJURY                                                                              |  50 |    1 |    **10** |   428.7 |  5,475 |
+| Violence without injury                    | VIOLENCE WITHOUT INJURY                                                                              |  49 |    1 |    **10** |   437.4 |  5,475 |
 | Stalking and harassment                    | STALKING AND HARASSMENT                                                                              |  23 |    2 |    **10** |    35.0 |    252 |
 | Rape offences                              | RAPE                                                                                                 |  17 | 1,825| **2,555** | 2,726.8 |  4,745 |
 | Other sexual offences                      | OTHER SEXUAL OFFENCES                                                                                | 138 |    5 | **182.25**|   395.6 |  2,555 |
 | Death or serious injury - unlawful driving | (matched by FULL_OFFENCE_TITLE pattern across VIOLENCE AGAINST THE PERSON)                           |  11 |   10 |   **365** |   380.4 |  1,095 |
-| Residential burglary                       | BURGLARY - RESIDENTIAL, BURGLARY IN A DWELLING                                                       |  13 |    2 |   **365** |   310.6 |    730 |
+| Residential burglary                       | BURGLARY - RESIDENTIAL, BURGLARY IN A DWELLING                                                       |  12 |    2 | **273.5** |   275.7 |    730 |
 | Non-residential burglary                   | BURGLARY - BUSINESS AND COMMUNITY                                                                    |   4 |    2 | **183.5** |   183.5 |    365 |
 | Shoplifting                                | SHOPLIFTING                                                                                          |   2 |    1 |     **1** |     1.0 |      1 |
 | Other theft offences                       | OTHER THEFT                                                                                          |  22 |    1 |     **2** |    20.8 |    182 |
@@ -102,7 +103,7 @@ weighted by national 2024/25 PRC counts:
 | Category                     | National-mix CCHI | Notes                                                                                |
 |------------------------------|------------------:|--------------------------------------------------------------------------------------|
 | Violence and sexual offences |            194.21 | 7 subgroups; weighted heavily by violence-without-injury and stalking volume         |
-| Burglary                     |            306.89 | residential 68% / non-residential 32% nationally                                     |
+| Burglary                     |            244.68 | residential 68% / non-residential 32% nationally                                     |
 | Robbery                      |            365.00 | both subgroups carry the same CCHI; mix is irrelevant                                |
 | Possession of weapons        |            273.75 | single subgroup                                                                      |
 | Criminal damage and arson    |             11.18 | criminal damage 95% / arson 5% nationally; arson dominates harm despite low volume   |
@@ -129,19 +130,33 @@ arson, Drugs, Robbery.
   classifications expired 31/03/17, aggravated burglary residential
   expired 2023-05-01). These offences do not appear in the 2024/25 PRC
   data and are excluded.
-- A small number of expired entries also appear in the main values sheet
-  with `EXPIRED` flagged in `FULL_OFFENCE_TITLE`. These are filtered out
-  by `cchi_loader._driving_death_rows` for the death-by-driving subgroup
-  (the only place the title-pattern match could otherwise pick them up).
+- Six rows in the main values sheet also carry `EXPIRED` in
+  `FULL_OFFENCE_TITLE` (one in `BURGLARY IN A DWELLING`, one in
+  `VIOLENCE WITHOUT INJURY`, one in `NON-NOTIFIABLE`, three with no
+  `SUB_GROUP`). These are filtered out globally in
+  `cchi_loader._load_values_sheet` so a retired offence code's CCHI
+  cannot pull the median for the active codes that share its subgroup.
+  The Residential burglary median in particular falls from 365 (with
+  the expired pre-2017 "burglary in a dwelling with intent" row at
+  CCHI = 730 included) to 273.5 (n = 12, the active codes only).
 - The `Offences need clarity` sheet (3 rows: Magistrates' Courts Act,
   Prison Act, Local Government Misc Provisions Acts catch-alls) carries
   no resolved subgroup mapping in Sherman 2026 and is excluded.
 - Sherman's `SUB_GROUP` column matches the PRC Offence Subgroup label
-  exactly for 14 of the 23 subgroups. The remaining 9 are resolved by
-  pooling multiple Sherman SUB_GROUPs (Public order, Vehicle, Burglary
-  residential), by trailing-word renames (Other theft offences vs OTHER
-  THEFT), or by FULL_OFFENCE_TITLE pattern (Death by driving). The
-  mapping lives in `cchi_loader.PRC_TO_SHERMAN_SUBGROUP`.
+  exactly for 14 of the 23 subgroups. The remaining 9 are resolved by:
+    1. Pooling multiple Sherman SUB_GROUPs — Residential burglary
+       (`BURGLARY - RESIDENTIAL` + `BURGLARY IN A DWELLING`), Public
+       order offences (4 labels), Vehicle offences (4 labels).
+    2. Dropping a trailing `offences` from the PRC label — Rape
+       offences → `RAPE`, Other theft offences → `OTHER THEFT`,
+       Possession of weapons offences → `POSSESSION OF WEAPONS`.
+    3. Other label restructures — Non-residential burglary →
+       `BURGLARY - BUSINESS AND COMMUNITY`; Miscellaneous crimes
+       against society → `MISC CRIMES AGAINST SOCIETY` (abbreviation).
+    4. `FULL_OFFENCE_TITLE` pattern — Death or serious injury -
+       unlawful driving (no dedicated Sherman SUB_GROUP).
+
+  The mapping lives in `cchi_loader.PRC_TO_SHERMAN_SUBGROUP`.
 
 ## Documented deviations from the Sherman methodology
 

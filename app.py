@@ -59,7 +59,6 @@ def build_map(scenario: str, selected_force: str | None) -> go.Figure:
         DF[harm_col].round(2),
         DF[gap_col].round(2),
         DF["officer_fte"],
-        DF["weighted_violence_cchi"].round(0),
     ))
 
     fig = go.Figure(go.Choropleth(
@@ -88,8 +87,7 @@ def build_map(scenario: str, selected_force: str | None) -> go.Figure:
             "Officers: %{customdata[4]:,} FTE<br>"
             "Officer share: %{customdata[1]}%<br>"
             "Harm share: %{customdata[2]}%<br>"
-            "Allocation gap: %{customdata[3]:+.2f} pp<br>"
-            "Weighted violence CCHI: %{customdata[5]}"
+            "Allocation gap: %{customdata[3]:+.2f} pp"
             "<extra></extra>"
         ),
     ))
@@ -132,15 +130,19 @@ def build_radar(force_name: str) -> go.Figure:
     row = DF[DF["force"] == force_name].iloc[0]
     profile = row["crime_profile"]
 
-    # Ratios vs national average. Clipped at 2.5 so a single outlier axis
-    # doesn't squash the polygon for everything else.
+    # Ratios vs national average. The polygon radius is clipped at 2.5 so a
+    # single outlier axis doesn't squash the polygon for everything else; the
+    # hover always shows the true unclipped ratio.
     theta = [data.CRIME_TYPE_SHORT[ct] for ct in data.CRIME_TYPES]
-    ratios = [min(profile[ct] / NATIONAL_PROFILE[ct], 2.5) for ct in data.CRIME_TYPES]
+    raw_ratios = [profile[ct] / NATIONAL_PROFILE[ct] if NATIONAL_PROFILE[ct] > 0 else 0.0
+                  for ct in data.CRIME_TYPES]
+    ratios = [min(r, 2.5) for r in raw_ratios]
 
     # Close both polygons by repeating the first point
-    theta_closed  = theta + [theta[0]]
-    ratios_closed = ratios + [ratios[0]]
-    nat_closed    = [1.0] * (len(theta) + 1)
+    theta_closed   = theta + [theta[0]]
+    ratios_closed  = ratios + [ratios[0]]
+    raw_closed     = raw_ratios + [raw_ratios[0]]
+    nat_closed     = [1.0] * (len(theta) + 1)
 
     fig = go.Figure()
 
@@ -158,13 +160,14 @@ def build_radar(force_name: str) -> go.Figure:
     fig.add_trace(go.Scatterpolar(
         r=ratios_closed,
         theta=theta_closed,
+        customdata=raw_closed,
         name=force_name,
         mode="lines+markers",
         line=dict(color="#1f3a5f", width=2),
         marker=dict(size=5, color="#1f3a5f"),
         fill="toself",
         fillcolor="rgba(31,58,95,0.25)",
-        hovertemplate="<b>%{theta}</b><br>%{r:.2f}× national<extra></extra>",
+        hovertemplate="<b>%{theta}</b><br>%{customdata:.2f}× national<extra></extra>",
     ))
 
     fig.update_layout(
@@ -286,7 +289,7 @@ app.layout = html.Div([
                         html.Tr([html.Td(""),                              html.Td("Death/serious injury — unlawful driving"),    html.Td("365")]),
                         html.Tr([html.Td(""),                              html.Td("Violence without injury"),                    html.Td("10")]),
                         html.Tr([html.Td(""),                              html.Td("Stalking and harassment"),                    html.Td("10")]),
-                        html.Tr([html.Td("Burglary"),                      html.Td("Residential burglary"),                       html.Td("365")]),
+                        html.Tr([html.Td("Burglary"),                      html.Td("Residential burglary"),                       html.Td("273.5")]),
                         html.Tr([html.Td(""),                              html.Td("Non-residential burglary"),                   html.Td("183.5")]),
                         html.Tr([html.Td("Criminal damage and arson"),     html.Td("Arson"),                                      html.Td("185")]),
                         html.Tr([html.Td(""),                              html.Td("Criminal damage"),                            html.Td("2")]),
@@ -362,9 +365,10 @@ app.layout = html.Div([
                     html.Li([
                         html.Code("Cambridge-CCHI-2026-update.xlsx"),
                         " — Cambridge Crime Harm Index, 2026 update. ",
-                        "1,266 rows in the values sheet covering ~700 ",
-                        "individual offences. Cambridge Centre for Evidence-",
-                        "Based Policing, Institute of Criminology."
+                        "1,266 rows in the values sheet covering 786 ",
+                        "distinct Home Office offence classifications. ",
+                        "Cambridge Centre for Evidence-Based Policing, ",
+                        "Institute of Criminology."
                     ]),
                 ], className="source-list"),
                 html.P([
