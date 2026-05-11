@@ -172,11 +172,12 @@ html, body {
     border-bottom: 1px solid #d8dce0;
 }
 
-.cchi-table td:nth-child(2),
-.cchi-table th:nth-child(2) {
+.cchi-table td:nth-child(3),
+.cchi-table th:nth-child(3) {
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
     color: #1f3a5f;
     text-align: right;
+    padding-left: 24px;
     padding-right: 0;
     min-width: 90px;
 }
