@@ -18,6 +18,7 @@ from dash import Input, Output, State, dcc, html, no_update
 import plotly.graph_objects as go
 
 import data
+import functions_loader
 import geo
 
 
@@ -27,6 +28,7 @@ import geo
 DF              = data.build_dataset()
 NATIONAL_PROFILE = data.national_crime_profile(DF)
 PFA_GEOJSON     = geo.get_pfa_geojson()
+FUNCTIONS_DF    = functions_loader.load_force_function_shares(DF["force"])
 
 DEFAULT_FORCE = "Metropolitan Police"
 
@@ -195,6 +197,76 @@ def build_radar(force_name: str) -> go.Figure:
         margin=dict(l=40, r=40, t=20, b=40),
         paper_bgcolor="rgba(0,0,0,0)",
         height=460,
+    )
+    return fig
+
+
+def build_functions(force_name: str) -> go.Figure:
+    """
+    Horizontal grouped bar of the selected force's officer-function mix
+    against the national average, across the 12 wider CIPFA POA functions.
+
+    Grouped (not stacked) bars: comparing one segment between a force and
+    the national split is the whole point here, and segments are far easier
+    to read side by side than stacked. The force bar carries the difference
+    from national in its hover so over-/under-investment reads at a glance.
+    """
+    row = FUNCTIONS_DF.loc[force_name]
+
+    # FUNCTIONS is ordered largest-share-first; horizontal bars stack from
+    # the bottom up, so reverse to put the biggest function at the top.
+    cats       = list(reversed(functions_loader.FUNCTIONS))
+    force_vals = [row[c] for c in cats]
+    nat_vals   = [functions_loader.NATIONAL_SHARES[c] for c in cats]
+    force_custom = [(n, f - n) for f, n in zip(force_vals, nat_vals)]
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        y=cats, x=force_vals,
+        orientation="h",
+        name=force_name,
+        marker_color="#1f3a5f",
+        customdata=force_custom,
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "This force: %{x:.1f}%<br>"
+            "National: %{customdata[0]:.1f}%<br>"
+            "Difference: %{customdata[1]:+.1f} pp"
+            "<extra></extra>"
+        ),
+    ))
+
+    fig.add_trace(go.Bar(
+        y=cats, x=nat_vals,
+        orientation="h",
+        name="National average",
+        marker_color="#c7ccd1",
+        hovertemplate="<b>%{y}</b><br>National: %{x:.1f}%<extra></extra>",
+    ))
+
+    fig.update_layout(
+        barmode="group",
+        bargap=0.22,
+        bargroupgap=0.06,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom", y=1.02,
+            xanchor="left", x=0,
+            font=dict(size=10),
+        ),
+        margin=dict(l=10, r=20, t=28, b=34),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=460,
+        xaxis=dict(
+            title=dict(text="Share of officers (%)", font=dict(size=11)),
+            ticksuffix="%",
+            gridcolor="#eef0f2",
+            zeroline=False,
+        ),
+        yaxis=dict(automargin=True, tickfont=dict(size=10, color="#333")),
+        font=dict(size=11),
     )
     return fig
 
@@ -416,6 +488,35 @@ app.layout = html.Div([
         ], className="panel panel-radar"),
     ], className="main-grid"),
 
+    html.Section([
+        html.Div([
+            html.Div(
+                [html.H2(id="functions-title")]
+                + ([html.Span(
+                        "placeholder data",
+                        className="mockup-badge",
+                        title="Synthetic per-force mix — the real workforce-"
+                              "functions table is not yet in data/raw/.",
+                    )] if functions_loader.IS_MOCKUP else []),
+                className="panel-header",
+            ),
+            html.P(
+                ["How the selected force distributes its officers across the "
+                 "wider CIPFA Police Objective Analysis functions, compared "
+                 "with the national average. Click a force on the map or use "
+                 "the dropdown above."]
+                + ([html.Span(
+                        " Per-force values are synthetic placeholders pending "
+                        "the real workforce-functions data; the national split "
+                        "is the published 2025 figure.",
+                        className="mockup-note",
+                    )] if functions_loader.IS_MOCKUP else []),
+                className="panel-caption",
+            ),
+            dcc.Graph(id="functions-graph", config={"displayModeBar": False}),
+        ], className="panel panel-functions"),
+    ], className="functions-row"),
+
     html.Footer([
         html.P([
             "Crime counts: Home Office Police Recorded Crime, Police Force ",
@@ -481,6 +582,16 @@ def map_click_to_dropdown(click_data, current):
     if clicked and clicked != current:
         return clicked
     return no_update
+
+
+@app.callback(
+    Output("functions-graph", "figure"),
+    Output("functions-title", "children"),
+    Input("force-dropdown", "value"),
+)
+def update_functions(force_name: str):
+    title = f"Officer function mix — {force_name}"
+    return build_functions(force_name), title
 
 
 # ---------------------------------------------------------------------------
