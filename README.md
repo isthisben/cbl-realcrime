@@ -23,6 +23,14 @@ over- or under-resourced relative to the harm they handle.
    categories — Violence and sexual offences, Burglary, Criminal damage
    and arson, Drugs, Robbery. Watch the map redistribute colour for those
    forces whose mix differs from the national average.
+4. **Officer function mix** — for the selected force, how its officers split
+   across the wider CIPFA Police Objective Analysis (POA) functions versus
+   the national average. Updates with the same force selection as the radar.
+   Shows seeded placeholder per-force values for now (see Data).
+5. **Proportional reallocation** — recommended change in officer numbers per
+   force if the national pool were distributed by each force's share of harm
+   instead of the current formula. A diverging bar per force, coloured to
+   match the map (green = recommend fewer, red = recommend more).
 
 ## Setup
 
@@ -57,8 +65,13 @@ under `data/`. Subsequent runs are offline.
 
 ## Data
 
-Every figure shown is read from the official Home Office and Cambridge
-releases listed above. No ratios are mocked or generated.
+Every crime, harm, officer-FTE, and allocation figure is read from the
+official Home Office and Cambridge releases listed below — none of those are
+mocked, and the proportional reallocation is computed from that same real
+data. The one exception is the officer function mix panel: until the Home
+Office workforce-functions table is added to `data/raw/`, it shows seeded
+placeholder per-force values (clearly badged in the app), built around the
+published national function split.
 
 - **Crime counts** — file `prc-pfa-mar2013-onwards-tables-230426.ods`,
   sheet `2024_25` (25,356 rows). Home Office Police Recorded Crime,
@@ -230,6 +243,12 @@ prc_loader.py             Reads the Home Office Police Recorded Crime ODS
 workforce_loader.py       Reads the Home Office Police Workforce ODS
 cchi_loader.py            Reads the Cambridge CCHI 2026 spreadsheet and
                           computes one median CCHI per PRC Offence Subgroup
+functions_loader.py       Officer function mix per force (seeded placeholder
+                          until the workforce-functions table is added)
+allocation_loader.py      Recommended allocation per force — proportional
+                          baseline now, optimiser output when available
+forecast_loader.py        Forecast schema (force x crime type x month) for the
+                          predictor output; placeholder until it lands
 geo.py                    ONS PFA boundaries (downloads + caches on first run)
 build_assets.py           Generates standalone HTML exports for sharing
 assets/style.css          Custom styling
