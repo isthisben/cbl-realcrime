@@ -2,10 +2,12 @@
 Police Resource Allocation Dashboard
 TU/e 4CBLW020 — Real-World Crime project
 
-Three components:
+Components:
   1. Choropleth map of allocation gap (officer share - harm share) per force
   2. Radar chart: crime profile of selected force vs national average
   3. Toggle: single CCHI per category vs subgroup-weighted per force
+  4. Officer function mix: selected force vs national across CIPFA POA functions
+  5. Proportional reallocation: recommended change in officer FTE per force
 
 Run with:  python app.py
 Then open: http://127.0.0.1:8050
@@ -17,6 +19,7 @@ import dash
 from dash import Input, Output, State, dcc, html, no_update
 import plotly.graph_objects as go
 
+import allocation_loader
 import data
 import functions_loader
 import geo
@@ -29,6 +32,7 @@ DF              = data.build_dataset()
 NATIONAL_PROFILE = data.national_crime_profile(DF)
 PFA_GEOJSON     = geo.get_pfa_geojson()
 FUNCTIONS_DF    = functions_loader.load_force_function_shares(DF["force"])
+ALLOCATION_DF   = allocation_loader.load_allocation(DF)
 
 DEFAULT_FORCE = "Metropolitan Police"
 
@@ -267,6 +271,87 @@ def build_functions(force_name: str) -> go.Figure:
         ),
         yaxis=dict(automargin=True, tickfont=dict(size=10, color="#333")),
         font=dict(size=11),
+    )
+    return fig
+
+
+def build_allocation() -> go.Figure:
+    """
+    Diverging horizontal bars: recommended change in officer FTE per force
+    under the proportional (harm-share) reallocation — Option B from
+    allocation_loader.
+
+    Colours match the map so a force keeps one colour story across the
+    dashboard: green = over-resourced (harm share below officer share, so the
+    model recommends fewer officers — bar points left); red = under-resourced
+    (recommends more — points right).
+
+    The x-axis is capped at ±2,000 FTE. Only the Metropolitan Police exceeds
+    it (the same outlier the map caps for); its bar is truncated and called
+    out, and every value is exact on hover.
+    """
+    alloc  = ALLOCATION_DF.sort_values("difference")   # most shed first
+    forces = alloc.index.tolist()
+    diffs  = alloc["difference"].tolist()
+    colors = ["#1a9850" if d < 0 else "#b2182b" for d in diffs]
+    custom = list(zip(
+        alloc["current_fte"],
+        alloc["recommended_fte"],
+        alloc["harm_share_pct"],
+    ))
+
+    cap = 2000
+
+    fig = go.Figure(go.Bar(
+        y=forces,
+        x=diffs,
+        orientation="h",
+        marker_color=colors,
+        marker_line_width=0,
+        customdata=custom,
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Current: %{customdata[0]:,.0f} FTE<br>"
+            "Recommended: %{customdata[1]:,.0f} FTE<br>"
+            "Harm share: %{customdata[2]:.2f}%<br>"
+            "Recommended change: %{x:+,.0f} FTE"
+            "<extra></extra>"
+        ),
+    ))
+
+    annotations = []
+    if "Metropolitan Police" in alloc.index:
+        met = alloc.loc["Metropolitan Police", "difference"]
+        if met < -cap:
+            annotations.append(dict(
+                x=120, y="Metropolitan Police",
+                xref="x", yref="y",
+                text=f"◀ Metropolitan Police {met:+,.0f} FTE (bar truncated)",
+                xanchor="left", yanchor="middle",
+                showarrow=False,
+                font=dict(size=9, color="#1a9850"),
+            ))
+
+    fig.update_layout(
+        margin=dict(l=10, r=20, t=10, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=900,
+        bargap=0.18,
+        yaxis=dict(
+            autorange="reversed",
+            tickfont=dict(size=9, color="#333"),
+            automargin=True,
+        ),
+        xaxis=dict(
+            title=dict(text="Recommended change in officers (FTE)",
+                       font=dict(size=11)),
+            range=[-cap, cap],
+            zeroline=True, zerolinecolor="#888", zerolinewidth=1,
+            gridcolor="#eef0f2",
+        ),
+        font=dict(size=11),
+        annotations=annotations,
     )
     return fig
 
@@ -516,6 +601,37 @@ app.layout = html.Div([
             dcc.Graph(id="functions-graph", config={"displayModeBar": False}),
         ], className="panel panel-functions"),
     ], className="functions-row"),
+
+    html.Section([
+        html.Div([
+            html.Div(
+                [html.H2("Proportional reallocation")]
+                + ([html.Span(
+                        "proportional baseline",
+                        className="baseline-badge",
+                        title="Officers reallocated by harm share (Option B). "
+                              "Real figures from the live dataset; the ILP "
+                              "optimiser output replaces this when ready.",
+                    )] if not allocation_loader.IS_OPTIMISED else []),
+                className="panel-header",
+            ),
+            html.P([
+                "Recommended change in officer numbers if the national pool "
+                f"({int(ALLOCATION_DF['current_fte'].sum()):,} FTE) were "
+                "distributed by each force's share of harm rather than the "
+                "current formula. Same colours as the map: ",
+                html.Span("green", className="legend-green"),
+                " = over-resourced (recommend fewer), ",
+                html.Span("red", className="legend-red"),
+                " = under-resourced (recommend more). Axis capped at ±2,000 "
+                "FTE; hover for exact figures.",
+            ], className="panel-caption"),
+            dcc.Graph(
+                figure=build_allocation(),
+                config={"displayModeBar": False},
+            ),
+        ], className="panel panel-allocation"),
+    ], className="allocation-row"),
 
     html.Footer([
         html.P([

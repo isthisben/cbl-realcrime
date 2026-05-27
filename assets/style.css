@@ -303,6 +303,25 @@ html, body {
     font-style: italic;
 }
 
+/* ---- Proportional reallocation panel ---- */
+.allocation-row {
+    margin-bottom: 18px;
+}
+
+.baseline-badge {
+    background: #e7eef6;
+    color: #1f3a5f;
+    border: 1px solid #c3d4e6;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: help;
+    white-space: nowrap;
+}
+
 /* ---- Footer ---- */
 .app-footer {
     border-top: 1px solid #d8dce0;
