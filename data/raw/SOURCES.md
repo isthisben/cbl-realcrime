@@ -1,6 +1,6 @@
 # Source data
 
-Two Home Office Official Statistics releases. Both are open data published
+Three Home Office Official Statistics releases. All are open data published
 under the Open Government Licence.
 
 ## prc-pfa-mar2013-onwards-tables-230426.ods
@@ -39,6 +39,30 @@ Total (Headcount), Total (FTE).
 44 forces (43 territorial + British Transport Police). The dashboard uses
 Worker type = "Police Officer" only and the most recent snapshot (31 March
 2025).
+
+## open-data-table-police-workforce-functions-280126.ods
+
+Police workforce, England and Wales — functions open data table. Officers and
+staff categorised by their primary role under the CIPFA Police Objective
+Analysis (POA) framework. Snapshots at 31 March each year, 2015 through 2025.
+
+- Release page: https://www.gov.uk/government/statistics/police-workforce-england-and-wales-31-march-2025
+- Release date: 28 January 2026 (revised; supersedes the October 2025 publication)
+- Next update: July 2026
+- Statistician: Jodie Hargreaves, Home Office
+
+Single Data sheet, 84,957 rows. Columns:
+As at 31 March, Geocode, Force name, Region, Worker type, Ethnicity (5+1),
+Ethnicity (3+1), Sex, Function subgroup number, Function subgroup name,
+Wider function number, Wider function name, Frontline type, Total (FTE).
+
+43 territorial forces (no British Transport Police). The officer function mix
+panel uses Worker type = "Police Officer" at the 31 March 2025 snapshot,
+summed by Force name and Wider function name (12 wider POA categories). Rows
+are cross-tabbed by sex / ethnicity / frontline type; per-force percentage
+shares are unaffected because that crossing is uniform across functions. Note
+the file carries year-to-year case variants of some labels (e.g. "Local
+Policing" vs "Local policing"), which the loader merges case-insensitively.
 
 ## Cambridge-CCHI-2026-update.xlsx
 
