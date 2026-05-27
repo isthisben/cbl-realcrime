@@ -279,6 +279,30 @@ html, body {
     font-size: 11px;
 }
 
+/* ---- Officer functions panel ---- */
+.functions-row {
+    margin-bottom: 18px;
+}
+
+.mockup-badge {
+    background: #fef3c7;
+    color: #92651a;
+    border: 1px solid #f5d98a;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: help;
+    white-space: nowrap;
+}
+
+.mockup-note {
+    color: #92651a;
+    font-style: italic;
+}
+
 /* ---- Footer ---- */
 .app-footer {
     border-top: 1px solid #d8dce0;
