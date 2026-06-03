@@ -19,6 +19,7 @@ Inputs:
     - data/raw/prc-pfa-mar2013-onwards-tables-230426.ods  (PRC counts)
     - data/raw/open-data-table-police-workforce-280126.ods (officer FTE)
     - data/raw/Cambridge-CCHI-2026-update.xlsx (CCHI per offence)
+    - data/raw/police-grant-2025-26.csv (central gov grant per force)
 
 Methodology and per-subgroup CCHI provenance: data/raw/CCHI_SOURCES.md.
 
@@ -39,9 +40,18 @@ from __future__ import annotations
 
 import pandas as pd
 
+import budget_loader
+import cache
 import cchi_loader
 import prc_loader
 import workforce_loader
+
+
+# Bump when a change in this module alters the assembled dataset (new column,
+# changed harm formula, different roll-up), so an existing on-disk cache is
+# rebuilt instead of served stale. Source-file changes invalidate the cache
+# automatically; this covers code changes that the files can't signal.
+_CACHE_VERSION = 1
 
 
 CRIME_TYPES = [
@@ -127,18 +137,24 @@ def _category_cchi_under_national_mix(
     return out
 
 
-def build_dataset() -> pd.DataFrame:
+def _assemble_dataset() -> pd.DataFrame:
+    """Parse the source files and assemble the per-force dataset. This is the
+    expensive path (~3 min cold, dominated by the odfpy ODS reads); callers go
+    through `build_dataset`, which caches the result to disk."""
     fte_by_force       = workforce_loader.load_force_fte()
     sg_counts_by_force = prc_loader.load_force_subgroup_counts()
     cchi_by_subgroup   = cchi_loader.load_subgroup_cchi()
+    budget_by_force    = budget_loader.load_force_budget()
 
-    fte_forces   = set(fte_by_force)
-    count_forces = set(sg_counts_by_force.index)
-    common = fte_forces & count_forces
+    fte_forces    = set(fte_by_force)
+    count_forces  = set(sg_counts_by_force.index)
+    budget_forces = set(budget_by_force)
+    common = fte_forces & count_forces & budget_forces
     if len(common) != 43:
         raise ValueError(
-            f"Expected 43 territorial PFAs in both sources, got {len(common)}. "
-            f"FTE={len(fte_forces)}, counts={len(count_forces)}."
+            f"Expected 43 territorial PFAs in all three sources, got {len(common)}. "
+            f"FTE={len(fte_forces)}, counts={len(count_forces)}, "
+            f"budget={len(budget_forces)}."
         )
 
     expected_subgroups = set()
@@ -167,6 +183,7 @@ def build_dataset() -> pd.DataFrame:
     rows = []
     for force in sorted(common):
         fte       = fte_by_force[force]
+        budget    = budget_by_force[force]
         sg_counts = {sg: int(sg_counts_by_force.loc[force, sg]) for sg in expected_subgroups}
 
         # Per-force harm under the per-force-mix scenario: every offence
@@ -192,6 +209,7 @@ def build_dataset() -> pd.DataFrame:
         rows.append({
             "force":           force,
             "officer_fte":     fte,
+            "budget":          budget,
             "harm_total_flat": harm_flat,
             "harm_total_sub":  harm_sub,
             "crime_profile":   crime_profile,
@@ -202,17 +220,51 @@ def build_dataset() -> pd.DataFrame:
     df = pd.DataFrame(rows)
 
     total_fte       = df["officer_fte"].sum()
+    total_budget    = df["budget"].sum()
     total_harm_flat = df["harm_total_flat"].sum()
     total_harm_sub  = df["harm_total_sub"].sum()
 
     df["actual_share_pct"]    = df["officer_fte"]     / total_fte       * 100
+    df["budget_share_pct"]    = df["budget"]          / total_budget    * 100
     df["harm_share_pct_flat"] = df["harm_total_flat"] / total_harm_flat * 100
     df["harm_share_pct_sub"]  = df["harm_total_sub"]  / total_harm_sub  * 100
 
     df["allocation_gap_flat"] = df["actual_share_pct"] - df["harm_share_pct_flat"]
     df["allocation_gap_sub"]  = df["actual_share_pct"] - df["harm_share_pct_sub"]
 
+    df["allocation_gap_budget_flat"] = df["budget_share_pct"] - df["harm_share_pct_flat"]
+    df["allocation_gap_budget_sub"]  = df["budget_share_pct"] - df["harm_share_pct_sub"]
+
     return df
+
+
+def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFrame:
+    """The per-force dataset, served from `data/cache/dataset.pkl` when the
+    cache is warm and the source files are unchanged, else parsed fresh and
+    re-cached. This is what the app calls at startup; a warm cache turns a
+    ~3-minute cold parse into an instant load.
+
+    refresh:   ignore any existing cache and re-parse (then overwrite it).
+    use_cache: set False to bypass the cache entirely (read and write).
+
+    The cache invalidates automatically when any of the four source files
+    (PRC, workforce, CCHI, grant) changes or when `_CACHE_VERSION` is bumped.
+    """
+    if not use_cache:
+        return _assemble_dataset()
+
+    sources_sig = cache.file_signature(
+        prc_loader.SOURCE,
+        workforce_loader.SOURCE,
+        cchi_loader.SOURCE,
+        budget_loader.SOURCE,
+    )
+    # A missing source -> None signature -> cache bypassed, so _assemble_dataset
+    # runs and raises the loader's own pointing-to-SOURCES.md FileNotFoundError
+    # rather than us masking it with a stale hit.
+    signature = (None if sources_sig is None
+                 else {"version": _CACHE_VERSION, "sources": sources_sig})
+    return cache.cached("dataset", signature, _assemble_dataset, refresh=refresh)
 
 
 def national_crime_profile(df: pd.DataFrame) -> dict[str, float]:
@@ -222,3 +274,29 @@ def national_crime_profile(df: pd.DataFrame) -> dict[str, float]:
             totals[ct] += v
     grand = sum(totals.values())
     return {ct: v / grand for ct, v in totals.items()}
+
+
+if __name__ == "__main__":
+    # Warm or refresh the on-disk dataset cache from the command line:
+    #   python data.py            build (or reuse) the cache, report timing
+    #   python data.py --refresh  ignore any cache and re-parse the raw files
+    #   python data.py --no-cache parse without reading or writing the cache
+    import argparse
+    import time
+
+    parser = argparse.ArgumentParser(
+        description="Build / refresh the dashboard dataset cache.")
+    parser.add_argument("--refresh", action="store_true",
+                        help="Ignore any existing cache and re-parse the raw files.")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Parse without reading or writing the cache.")
+    args = parser.parse_args()
+
+    t0 = time.perf_counter()
+    df = build_dataset(refresh=args.refresh, use_cache=not args.no_cache)
+    dt = time.perf_counter() - t0
+
+    print(f"dataset: {len(df)} forces, {len(df.columns)} columns in {dt:.2f}s")
+    cache_path = cache.CACHE_DIR / "dataset.pkl"
+    if not args.no_cache and cache_path.exists():
+        print(f"cache:   {cache_path} ({cache_path.stat().st_size / 1024:.0f} KB)")

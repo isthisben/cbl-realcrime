@@ -1,7 +1,9 @@
 # Source data
 
-Three Home Office Official Statistics releases. All are open data published
-under the Open Government Licence.
+Five releases from the Home Office (Official Statistics + the Police Grant
+Report) and one harm-weight release from the University of Cambridge. All
+Home Office releases are open data published under the Open Government
+Licence.
 
 ## prc-pfa-mar2013-onwards-tables-230426.ods
 
@@ -63,6 +65,56 @@ are cross-tabbed by sex / ethnicity / frontline type; per-force percentage
 shares are unaffected because that crossing is uniform across functions. Note
 the file carries year-to-year case variants of some labels (e.g. "Local
 Policing" vs "Local policing"), which the loader merges case-insensitively.
+
+## police-grant-2025-26.csv
+
+Central government grant per police force, 2025-26 financial year.
+Hand-extracted from the Home Office *Police Grant Report (England and Wales)
+2025-26* per-force table — the 'Overall Total' column, which is the sum of:
+
+- Police Main Grant
+- ex-DCLG Formula Funding (English forces only — Welsh forces receive
+  equivalent funding via the Welsh Government)
+- Legacy Council Tax Grants (English forces only — same Welsh-routing note)
+- Welsh Top-Up (Welsh forces only)
+
+- Release page: https://www.gov.uk/government/publications/police-grant-report-england-and-wales-2025-to-2026
+- Statutory instrument laid: 5 February 2025
+- Statistician: Police Resources Unit, Home Office
+
+43 rows: force name (canonical dashboard spelling), `budget_gbp`. National
+total reconciles to £9,806,553,489. Council tax precept (~40 % of total force
+funding) is excluded by design — the precept is locally raised and is not
+part of the redistributable national pool.
+
+Welsh forces (Dyfed-Powys, Gwent, North Wales, South Wales) appear lower
+than English peers of comparable size because two of the four component
+grants flow through the Welsh Government separately. The
+`police-funding-england-and-wales-2015-to-2026-tables.ods` file (below)
+includes Welsh Government funding as a separate line, useful if a future
+analysis needs a true England-vs-Wales like-for-like comparison.
+
+## police-funding-england-and-wales-2015-to-2026-tables.ods
+
+Home Office Police Funding England and Wales tables, 2015-16 through
+2025-26. Companion publication to the Police Grant Report — published
+annually as the Police Funding Statistics release.
+
+- Release page: https://www.gov.uk/government/statistics/police-funding-england-and-wales-2015-to-2026
+- Release date: April 2025
+- Statistician: Police Resources Unit, Home Office
+
+Thirteen sheets covering eleven financial years of total police funding by
+stream. Per-force splits live in `Table_4a` (nominal) and `Table_4b` (real
+terms): one row per force, columns grouped by year as Government Funding |
+Precept | Total. `Table_1a/1b` give national funding by stream; the rest are
+breakdowns of wider-system funding and counter-terrorism funding.
+
+Not wired into the dashboard yet — the 2025-26 figure is sourced from
+`police-grant-2025-26.csv` (above) because the two publications scope
+'Government Funding' differently and the Police Grant Report number is the
+formal redistribution-eligible total. The ODS file is kept here for future
+historical-year work (per-force funding trajectory, real-terms trend).
 
 ## Cambridge-CCHI-2026-update.xlsx
 

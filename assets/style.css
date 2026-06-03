@@ -261,6 +261,22 @@ html, body {
     font-size: 12px;
 }
 
+.panel-caption .bold,
+.panel-footnote .bold {
+    color: #333;
+    font-weight: 600;
+}
+
+.panel-footnote {
+    margin: 0 0 10px 0;
+    padding: 8px 10px;
+    background: #fff8e5;
+    border-left: 3px solid #e5c054;
+    color: #6b5a1f;
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
 .legend-green {
     background: #1a9850;
     color: white;
