@@ -25,6 +25,10 @@ desktop.ini
 # Cached GeoJSON (downloaded on first run)
 data/*.geojson
 
+# Pre-computed dataset cache (pickled; regenerated from the raw files on
+# demand via `python data.py`, or automatically whenever a source changes)
+data/cache/
+
 # Raw Home Office data files — ~15MB; retrieve per data/raw/SOURCES.md
 data/raw/*.ods
 

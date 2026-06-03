@@ -45,6 +45,8 @@ import random
 
 import pandas as pd
 
+import cache
+
 
 SOURCE = (
     pathlib.Path(__file__).parent
@@ -167,6 +169,11 @@ _WIDER_FUNCTION_MAP = {
 
 _SNAPSHOT_YEAR = 2025
 
+# Bump when _load_real's parsing / mapping changes the returned shares, so an
+# existing on-disk cache is rebuilt. The source-file signature handles a data
+# refresh; this covers code changes the file can't signal.
+_CACHE_VERSION = 1
+
 
 def _load_real(forces: list[str]) -> pd.DataFrame:
     """Per-force officer-function shares from the real Home Office workforce-
@@ -219,19 +226,30 @@ def _load_real(forces: list[str]) -> pd.DataFrame:
     return shares.reindex(list(forces))
 
 
-def load_force_function_shares(forces: list[str] | None = None) -> pd.DataFrame:
+def load_force_function_shares(forces: list[str] | None = None, *,
+                               refresh: bool = False) -> pd.DataFrame:
     """Per-force officer-function shares as percentages (each row ~100).
 
     `forces` pins the output to exactly the dashboard's canonical force list
     (pass `DF["force"]`) so the panel can never KeyError on a selected force.
     Defaults to the keys with published anchors if not supplied.
+
+    The real-data path parses a large workforce-functions ODS, so its result
+    is cached to disk (keyed on the source file and the requested force list);
+    pass `refresh=True` to re-parse. The synthetic mockup path is cheap and
+    never cached.
     """
     global IS_MOCKUP
     force_list = list(forces) if forces is not None else sorted(_OVERRIDES)
 
     if SOURCE.exists():
         IS_MOCKUP = False
-        return _load_real(force_list)
+        src_sig = cache.file_signature(SOURCE)
+        signature = (None if src_sig is None
+                     else {"version": _CACHE_VERSION, "source": src_sig,
+                           "forces": force_list})
+        return cache.cached("functions", signature,
+                            lambda: _load_real(force_list), refresh=refresh)
 
     IS_MOCKUP = True
     return _mockup(force_list)
