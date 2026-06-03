@@ -22,6 +22,7 @@ import plotly.graph_objects as go
 
 import allocation_loader
 import data
+import forecast_loader
 import functions_loader
 import geo
 
@@ -35,6 +36,7 @@ PFA_GEOJSON     = geo.get_pfa_geojson()
 FUNCTIONS_DF    = functions_loader.load_force_function_shares(DF["force"])
 ALLOCATION_FTE    = allocation_loader.load_allocation(DF, basis="fte")
 ALLOCATION_BUDGET = allocation_loader.load_allocation(DF, basis="budget")
+FORECAST_DF       = forecast_loader.load_forecast(DF["force"])
 
 DEFAULT_FORCE = "Metropolitan Police"
 DEFAULT_BASIS = "budget"
@@ -415,6 +417,51 @@ def build_allocation(basis: str) -> go.Figure:
     return fig
 
 
+def build_forecast(force_name: str) -> go.Figure:
+    """
+    12-month-ahead crime forecast for the selected force: total predicted
+    recorded offences per month, summed across the 13 categories.
+
+    Reads forecast_loader, which serves the SARIMAX model output once it is
+    dropped into data/raw/forecast_sarimax.{csv,parquet} and seeded synthetic
+    placeholder data until then. While placeholder data is in use the panel
+    carries a badge, so a synthetic series is never mistaken for a real one.
+    """
+    rows   = FORECAST_DF[FORECAST_DF["force"] == force_name]
+    months = sorted(rows["month"].unique())
+    total_by_month = rows.groupby("month")["y_pred"].sum().reindex(months)
+
+    fig = go.Figure(go.Scatter(
+        x=list(months),
+        y=list(total_by_month.values),
+        mode="lines+markers",
+        line=dict(color="#1f3a5f", width=2.5),
+        marker=dict(size=5, color="#1f3a5f"),
+        hovertemplate="<b>%{x}</b><br>Predicted recorded offences: %{y:,.0f}"
+                      "<extra></extra>",
+    ))
+    fig.update_layout(
+        margin=dict(l=10, r=20, t=12, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=360,
+        xaxis=dict(
+            title=dict(text="Forecast month", font=dict(size=11)),
+            tickfont=dict(size=10),
+            gridcolor="#eef0f2",
+        ),
+        yaxis=dict(
+            title=dict(text="Predicted recorded offences / month",
+                       font=dict(size=11)),
+            gridcolor="#eef0f2",
+            rangemode="tozero",
+            zeroline=False,
+        ),
+        font=dict(size=11),
+    )
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
@@ -424,6 +471,10 @@ app = dash.Dash(
     title="Police Allocation — Harm vs PAF",
     update_title=None,
 )
+
+# WSGI entrypoint for production hosting (e.g. `gunicorn app:server`). Local
+# `python app.py` still serves via app.run() at the bottom of this file.
+server = app.server
 
 app.layout = html.Div([
     html.Header([
@@ -476,7 +527,9 @@ app.layout = html.Div([
                 ),
             ], className="control-group"),
         ], className="control-row"),
+    ], className="controls-bar"),
 
+    html.Section([
         html.P([
             html.Span("Single CCHI per category: ", className="bold"),
             "every force is treated as having the national mix of subgroups "
@@ -768,6 +821,35 @@ app.layout = html.Div([
         ], className="panel panel-allocation"),
     ], className="allocation-row"),
 
+    html.Section([
+        html.Div([
+            html.Div(
+                [html.H2(id="forecast-title")]
+                + ([html.Span(
+                        "placeholder data",
+                        className="mockup-badge",
+                        title="Seeded synthetic forecast — the SARIMAX model "
+                              "output is not yet in data/raw/.",
+                    )] if forecast_loader.IS_MOCKUP else []),
+                className="panel-header",
+            ),
+            html.P(
+                ["12-month-ahead forecast of total recorded offences for the "
+                 "selected force, summed across the 13 crime categories. Use "
+                 "the dropdown or click a force on the map."]
+                + ([html.Span(
+                        " Values are seeded synthetic placeholders pending the "
+                        "SARIMAX time-series model; the panel switches to the "
+                        "real forecast automatically once the model output "
+                        "lands in data/raw/.",
+                        className="mockup-note",
+                    )] if forecast_loader.IS_MOCKUP else []),
+                className="panel-caption",
+            ),
+            dcc.Graph(id="forecast-graph", config={"displayModeBar": False}),
+        ], className="panel panel-forecast"),
+    ], className="forecast-row"),
+
     html.Footer([
         html.P([
             "Crime counts: Home Office Police Recorded Crime, Police Force ",
@@ -937,6 +1019,16 @@ def map_click_to_dropdown(click_data, current):
 def update_functions(force_name: str):
     title = f"Officer function mix — {force_name}"
     return build_functions(force_name), title
+
+
+@app.callback(
+    Output("forecast-graph", "figure"),
+    Output("forecast-title", "children"),
+    Input("force-dropdown", "value"),
+)
+def update_forecast(force_name: str):
+    title = f"Crime forecast — {force_name}"
+    return build_forecast(force_name), title
 
 
 # ---------------------------------------------------------------------------

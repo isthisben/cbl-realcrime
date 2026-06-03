@@ -53,6 +53,13 @@ SOURCE = (
     / "data" / "raw" / "open-data-table-police-workforce-functions-280126.ods"
 )
 
+# Committed deploy snapshot, read when the raw ODS is absent (a host that
+# ships only the snapshot). Written by write_snapshot() / `python data.py
+# --snapshot`.
+_SNAPSHOT_FILE = (
+    pathlib.Path(__file__).parent / "data" / "snapshot" / "functions.pkl"
+)
+
 # The 12 wider POA function categories, ordered by national share (largest
 # first) so charts read top-to-bottom in order of size.
 FUNCTIONS = [
@@ -251,5 +258,21 @@ def load_force_function_shares(forces: list[str] | None = None, *,
         return cache.cached("functions", signature,
                             lambda: _load_real(force_list), refresh=refresh)
 
+    # Raw functions ODS absent (e.g. a deploy host). Prefer the committed
+    # snapshot — real shares — over the synthetic mockup.
+    if _SNAPSHOT_FILE.exists():
+        IS_MOCKUP = False
+        return pd.read_pickle(_SNAPSHOT_FILE).reindex(force_list)
+
     IS_MOCKUP = True
     return _mockup(force_list)
+
+
+def write_snapshot(forces: list[str]) -> pathlib.Path:
+    """Write the committed deploy snapshot of per-force function shares
+    (data/snapshot/functions.pkl) from the raw ODS, for hosts that don't ship
+    the ODS. Called by data.write_snapshot(); requires the ODS present."""
+    shares = load_force_function_shares(list(forces))
+    _SNAPSHOT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    shares.to_pickle(_SNAPSHOT_FILE)
+    return _SNAPSHOT_FILE

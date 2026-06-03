@@ -22,8 +22,10 @@ ENV/
 Thumbs.db
 desktop.ini
 
-# Cached GeoJSON (downloaded on first run)
+# Cached GeoJSON (downloaded on first run). The committed copy below is
+# shipped for hosting so the server needs no network on boot.
 data/*.geojson
+!data/pfa_2023_buc.geojson
 
 # Pre-computed dataset cache (pickled; regenerated from the raw files on
 # demand via `python data.py`, or automatically whenever a source changes)

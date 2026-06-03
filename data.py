@@ -38,6 +38,8 @@ files we use here and are documented as known gaps:
 
 from __future__ import annotations
 
+import pathlib
+
 import pandas as pd
 
 import budget_loader
@@ -52,6 +54,12 @@ import workforce_loader
 # rebuilt instead of served stale. Source-file changes invalidate the cache
 # automatically; this covers code changes that the files can't signal.
 _CACHE_VERSION = 1
+
+# Committed deploy snapshot. A host that ships only this snapshot (not the
+# ~15 MB raw ODS files) reads it directly — see build_dataset. Regenerate with
+# `python data.py --snapshot` after a data or logic change, then commit it.
+_SNAPSHOT_DIR  = pathlib.Path(__file__).parent / "data" / "snapshot"
+_SNAPSHOT_FILE = _SNAPSHOT_DIR / "dataset.pkl"
 
 
 CRIME_TYPES = [
@@ -249,6 +257,11 @@ def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFr
 
     The cache invalidates automatically when any of the four source files
     (PRC, workforce, CCHI, grant) changes or when `_CACHE_VERSION` is bumped.
+
+    Deploy fallback: when the raw source files are absent (a host that ships
+    only the committed snapshot), the snapshot at `data/snapshot/dataset.pkl`
+    is served directly. With neither raw files nor a snapshot present, the
+    loader's own FileNotFoundError surfaces.
     """
     if not use_cache:
         return _assemble_dataset()
@@ -259,11 +272,15 @@ def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFr
         cchi_loader.SOURCE,
         budget_loader.SOURCE,
     )
-    # A missing source -> None signature -> cache bypassed, so _assemble_dataset
-    # runs and raises the loader's own pointing-to-SOURCES.md FileNotFoundError
-    # rather than us masking it with a stale hit.
-    signature = (None if sources_sig is None
-                 else {"version": _CACHE_VERSION, "sources": sources_sig})
+    if sources_sig is None:
+        # Raw files absent (e.g. a deploy host). Serve the committed snapshot
+        # if present; otherwise fall through so _assemble_dataset raises the
+        # loader's pointing-to-SOURCES.md FileNotFoundError.
+        if _SNAPSHOT_FILE.exists():
+            return pd.read_pickle(_SNAPSHOT_FILE)
+        return _assemble_dataset()
+
+    signature = {"version": _CACHE_VERSION, "sources": sources_sig}
     return cache.cached("dataset", signature, _assemble_dataset, refresh=refresh)
 
 
@@ -276,21 +293,44 @@ def national_crime_profile(df: pd.DataFrame) -> dict[str, float]:
     return {ct: v / grand for ct, v in totals.items()}
 
 
+def write_snapshot() -> list[pathlib.Path]:
+    """Write the committed deploy snapshots (data/snapshot/) that a host reads
+    in place of the raw ODS files: the assembled dataset and the officer-
+    function shares. Run `python data.py --snapshot` after a data or logic
+    change, then commit data/snapshot/."""
+    import functions_loader
+
+    df = build_dataset()
+    _SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_pickle(_SNAPSHOT_FILE)
+    fpath = functions_loader.write_snapshot(df["force"])
+    return [_SNAPSHOT_FILE, fpath]
+
+
 if __name__ == "__main__":
-    # Warm or refresh the on-disk dataset cache from the command line:
+    # Warm/refresh the on-disk cache, or write the committed deploy snapshot:
     #   python data.py            build (or reuse) the cache, report timing
     #   python data.py --refresh  ignore any cache and re-parse the raw files
     #   python data.py --no-cache parse without reading or writing the cache
+    #   python data.py --snapshot write data/snapshot/ for hosting, then exit
     import argparse
     import time
 
     parser = argparse.ArgumentParser(
-        description="Build / refresh the dashboard dataset cache.")
+        description="Build / refresh the dashboard dataset cache or snapshot.")
     parser.add_argument("--refresh", action="store_true",
                         help="Ignore any existing cache and re-parse the raw files.")
     parser.add_argument("--no-cache", action="store_true",
                         help="Parse without reading or writing the cache.")
+    parser.add_argument("--snapshot", action="store_true",
+                        help="Write the committed deploy snapshot "
+                             "(data/snapshot/) for hosting, then exit.")
     args = parser.parse_args()
+
+    if args.snapshot:
+        for p in write_snapshot():
+            print(f"wrote {p} ({p.stat().st_size / 1024:.0f} KB)")
+        raise SystemExit(0)
 
     t0 = time.perf_counter()
     df = build_dataset(refresh=args.refresh, use_cache=not args.no_cache)
