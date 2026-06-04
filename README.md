@@ -1,3 +1,13 @@
+---
+title: Police Resource Allocation
+emoji: 🚓
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Police Resource Allocation Dashboard
 
 Dashboard for **TU/e 4CBLW020 — Real-World Crime project**.
