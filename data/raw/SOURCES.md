@@ -82,17 +82,19 @@ Hand-extracted from the Home Office *Police Grant Report (England and Wales)
 - Statutory instrument laid: 5 February 2025
 - Statistician: Police Resources Unit, Home Office
 
-43 rows: force name (canonical dashboard spelling), `budget_gbp`. National
-total reconciles to £9,806,553,489. Council tax precept (~40 % of total force
-funding) is excluded by design — the precept is locally raised and is not
-part of the redistributable national pool.
+43 rows: force name (canonical dashboard spelling), `budget_gbp` (the column
+header is legacy; it holds the formula grant). National total reconciles to
+£9,806,553,489. This is the redistributable pool the model reallocates.
+Council tax precept (locally raised, not redistributable) is not in this
+figure; it enters the dashboard via `funding_loader` (below) as a fixed
+component of each force's total funding.
 
 Welsh forces (Dyfed-Powys, Gwent, North Wales, South Wales) appear lower
-than English peers of comparable size because two of the four component
-grants flow through the Welsh Government separately. The
-`police-funding-england-and-wales-2015-to-2026-tables.ods` file (below)
-includes Welsh Government funding as a separate line, useful if a future
-analysis needs a true England-vs-Wales like-for-like comparison.
+than English peers here because two of the four component grants flow through
+the Welsh Government separately. That under-count does not distort the
+allocation gap, which is measured on total funding from
+`police-funding-england-and-wales-2015-to-2026-tables.ods` (below) — those
+totals include the Welsh-routed money.
 
 ## police-funding-england-and-wales-2015-to-2026-tables.ods
 
@@ -107,14 +109,22 @@ annually as the Police Funding Statistics release.
 Thirteen sheets covering eleven financial years of total police funding by
 stream. Per-force splits live in `Table_4a` (nominal) and `Table_4b` (real
 terms): one row per force, columns grouped by year as Government Funding |
-Precept | Total. `Table_1a/1b` give national funding by stream; the rest are
-breakdowns of wider-system funding and counter-terrorism funding.
+Precept | Total, in £ million. `Table_1a/1b` give national funding by stream;
+the rest are breakdowns of wider-system and counter-terrorism funding.
 
-Not wired into the dashboard yet — the 2025-26 figure is sourced from
-`police-grant-2025-26.csv` (above) because the two publications scope
-'Government Funding' differently and the Police Grant Report number is the
-formal redistribution-eligible total. The ODS file is kept here for future
-historical-year work (per-force funding trajectory, real-terms trend).
+`funding_loader.py` reads `Table_4a` for 2025-26 (the final three data
+columns). It keeps the 43 territorial PFAs (ONS codes E23*/W15*, dropping the
+E12* region / E92/W92 country / K04 England-and-Wales aggregate rows), reads
+City of London's blank precept as £0, and converts £ million to whole pounds.
+The dashboard's allocation gap is measured on the `Total` column (grant +
+precept + ring-fenced specific grants, £17.57 bn across the 43 forces); the
+`Precept` column (£6.06 bn) and the specific grants are held fixed when the
+model reallocates. `Government Funding` here is broader than the Police Grant
+Report 'Overall Total' (it bundles ring-fenced specific grants such as the
+Met's National & International Capital City grant), which is why only the
+narrower grant report figure (`police-grant-2025-26.csv`) is treated as the
+redistributable pool. Loader validation reconciles national precept to
+£6,057,626,419.
 
 ## Cambridge-CCHI-2026-update.xlsx
 

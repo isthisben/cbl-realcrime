@@ -19,7 +19,18 @@ Inputs:
     - data/raw/prc-pfa-mar2013-onwards-tables-230426.ods  (PRC counts)
     - data/raw/open-data-table-police-workforce-280126.ods (officer FTE)
     - data/raw/Cambridge-CCHI-2026-update.xlsx (CCHI per offence)
-    - data/raw/police-grant-2025-26.csv (central gov grant per force)
+    - data/raw/police-grant-2025-26.csv (redistributable formula grant)
+    - data/raw/police-funding-england-and-wales-2015-to-2026-tables.ods
+      (total funding + precept per force, Table 4a)
+
+Resource side:
+    Each force carries an officer FTE, a redistributable formula grant, a
+    council-tax precept, and a total funding figure (grant + precept +
+    ring-fenced specific grants). Two allocation gaps are produced — officer
+    share - harm share, and total-funding share - harm share - each under both
+    the flat and sub harm scenarios. The funding gap is the headline; the
+    reallocation (allocation_loader) moves only the formula grant, holding
+    precept and specific grants fixed.
 
 Methodology and per-subgroup CCHI provenance: data/raw/CCHI_SOURCES.md.
 
@@ -42,9 +53,10 @@ import pathlib
 
 import pandas as pd
 
-import budget_loader
 import cache
 import cchi_loader
+import funding_loader
+import grant_loader
 import prc_loader
 import workforce_loader
 
@@ -53,7 +65,7 @@ import workforce_loader
 # changed harm formula, different roll-up), so an existing on-disk cache is
 # rebuilt instead of served stale. Source-file changes invalidate the cache
 # automatically; this covers code changes that the files can't signal.
-_CACHE_VERSION = 1
+_CACHE_VERSION = 2
 
 # Committed deploy snapshot. A host that ships only this snapshot (not the
 # ~15 MB raw ODS files) reads it directly — see build_dataset. Regenerate with
@@ -152,17 +164,19 @@ def _assemble_dataset() -> pd.DataFrame:
     fte_by_force       = workforce_loader.load_force_fte()
     sg_counts_by_force = prc_loader.load_force_subgroup_counts()
     cchi_by_subgroup   = cchi_loader.load_subgroup_cchi()
-    budget_by_force    = budget_loader.load_force_budget()
+    grant_by_force     = grant_loader.load_force_grant()
+    funding_by_force   = funding_loader.load_force_funding()
 
-    fte_forces    = set(fte_by_force)
-    count_forces  = set(sg_counts_by_force.index)
-    budget_forces = set(budget_by_force)
-    common = fte_forces & count_forces & budget_forces
+    fte_forces     = set(fte_by_force)
+    count_forces   = set(sg_counts_by_force.index)
+    grant_forces   = set(grant_by_force)
+    funding_forces = set(funding_by_force.index)
+    common = fte_forces & count_forces & grant_forces & funding_forces
     if len(common) != 43:
         raise ValueError(
-            f"Expected 43 territorial PFAs in all three sources, got {len(common)}. "
+            f"Expected 43 territorial PFAs in all four sources, got {len(common)}. "
             f"FTE={len(fte_forces)}, counts={len(count_forces)}, "
-            f"budget={len(budget_forces)}."
+            f"grant={len(grant_forces)}, funding={len(funding_forces)}."
         )
 
     expected_subgroups = set()
@@ -190,8 +204,10 @@ def _assemble_dataset() -> pd.DataFrame:
 
     rows = []
     for force in sorted(common):
-        fte       = fte_by_force[force]
-        budget    = budget_by_force[force]
+        fte           = fte_by_force[force]
+        grant         = grant_by_force[force]
+        total_funding = float(funding_by_force.loc[force, "total_funding_gbp"])
+        precept       = float(funding_by_force.loc[force, "precept_gbp"])
         sg_counts = {sg: int(sg_counts_by_force.loc[force, sg]) for sg in expected_subgroups}
 
         # Per-force harm under the per-force-mix scenario: every offence
@@ -217,7 +233,13 @@ def _assemble_dataset() -> pd.DataFrame:
         rows.append({
             "force":           force,
             "officer_fte":     fte,
-            "budget":          budget,
+            "grant":           grant,
+            "precept":         precept,
+            "total_funding":   total_funding,
+            # Everything that is not the redistributable formula grant -
+            # precept plus ring-fenced specific grants - is held fixed when
+            # the model reallocates.
+            "fixed_funding":   total_funding - grant,
             "harm_total_flat": harm_flat,
             "harm_total_sub":  harm_sub,
             "crime_profile":   crime_profile,
@@ -228,20 +250,24 @@ def _assemble_dataset() -> pd.DataFrame:
     df = pd.DataFrame(rows)
 
     total_fte       = df["officer_fte"].sum()
-    total_budget    = df["budget"].sum()
+    total_funding   = df["total_funding"].sum()
     total_harm_flat = df["harm_total_flat"].sum()
     total_harm_sub  = df["harm_total_sub"].sum()
 
-    df["actual_share_pct"]    = df["officer_fte"]     / total_fte       * 100
-    df["budget_share_pct"]    = df["budget"]          / total_budget    * 100
+    df["actual_share_pct"]    = df["officer_fte"]    / total_fte        * 100
+    df["funding_share_pct"]   = df["total_funding"]  / total_funding    * 100
     df["harm_share_pct_flat"] = df["harm_total_flat"] / total_harm_flat * 100
     df["harm_share_pct_sub"]  = df["harm_total_sub"]  / total_harm_sub  * 100
 
+    # Officer (headcount) allocation gap: officer share - harm share.
     df["allocation_gap_flat"] = df["actual_share_pct"] - df["harm_share_pct_flat"]
     df["allocation_gap_sub"]  = df["actual_share_pct"] - df["harm_share_pct_sub"]
 
-    df["allocation_gap_budget_flat"] = df["budget_share_pct"] - df["harm_share_pct_flat"]
-    df["allocation_gap_budget_sub"]  = df["budget_share_pct"] - df["harm_share_pct_sub"]
+    # Funding allocation gap: total-funding share - harm share. Total funding
+    # is grant + precept + specific grants, so a force that is well funded
+    # locally (high precept) no longer looks under-resourced on grant alone.
+    df["allocation_gap_funding_flat"] = df["funding_share_pct"] - df["harm_share_pct_flat"]
+    df["allocation_gap_funding_sub"]  = df["funding_share_pct"] - df["harm_share_pct_sub"]
 
     return df
 
@@ -270,7 +296,8 @@ def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFr
         prc_loader.SOURCE,
         workforce_loader.SOURCE,
         cchi_loader.SOURCE,
-        budget_loader.SOURCE,
+        grant_loader.SOURCE,
+        funding_loader.SOURCE,
     )
     if sources_sig is None:
         # Raw files absent (e.g. a deploy host). Serve the committed snapshot

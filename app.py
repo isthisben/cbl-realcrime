@@ -6,9 +6,10 @@ Components:
   1. Choropleth map of allocation gap (resource share - harm share) per force
   2. Radar chart: crime profile of selected force vs national average
   3. Toggle: single CCHI per category vs subgroup-weighted per force
-  4. Toggle: budget basis (central grant £) vs officer basis (FTE)
+  4. Toggle: funding basis (total funding £) vs officer basis (FTE)
   5. Officer function mix: selected force vs national across CIPFA POA functions
-  6. Proportional reallocation: recommended change in budget £ or officer FTE
+  6. Reallocation: recommended change in core grant £ (so total funding
+     tracks harm) or officer FTE
 
 Run with:  python app.py
 Then open: http://127.0.0.1:8050
@@ -41,13 +42,6 @@ FORECAST_DF       = forecast_loader.load_forecast(DF["force"])
 DEFAULT_FORCE = "Metropolitan Police"
 DEFAULT_BASIS = "budget"
 
-# Welsh territorial forces. In the Police Grant Report, their Overall Total
-# reflects Police Main Grant + Welsh Top-Up only — DCLG Formula Funding and
-# Legacy Council Tax Grants for Welsh forces flow through the Welsh
-# Government separately and are not part of the redistributable English-and-
-# Welsh pool. Surfaced as a footnote on the map when basis="budget".
-WELSH_FORCES = {"Dyfed-Powys", "Gwent", "North Wales", "South Wales"}
-
 
 # ---------------------------------------------------------------------------
 # Figure builders
@@ -62,20 +56,20 @@ def build_map(basis: str, scenario: str, selected_force: str | None) -> go.Figur
     selected_force: outline this force more heavily.
     """
     if basis == "budget":
-        gap_col   = f"allocation_gap_budget_{scenario}"
-        share_col = "budget_share_pct"
+        gap_col   = f"allocation_gap_funding_{scenario}"
+        share_col = "funding_share_pct"
     else:
         gap_col   = f"allocation_gap_{scenario}"
         share_col = "actual_share_pct"
     harm_col = f"harm_share_pct_{scenario}"
 
-    # Cap the colour scale at ±3 percentage points. The Metropolitan Police
-    # sits around +7pp under the per-force-mix scenario and would otherwise
-    # dominate the scale, leaving every other force looking nearly white.
-    # With a tighter cap the Met saturates at full green and the rest of
-    # the country shows a useful gradient. The hover always shows the true
-    # value.
-    cmax = 3.0
+    # Cap the colour scale so the Metropolitan Police (the large over-resourced
+    # outlier under either basis — about +6pp on funding, +7pp on officers)
+    # doesn't dominate and leave every other force looking nearly white. The
+    # Met saturates at full green and the rest of the country shows a useful
+    # gradient; the hover always shows the true value. Funding gaps are tighter
+    # than officer gaps, so the funding basis uses a tighter cap.
+    cmax = 2.0 if basis == "budget" else 3.0
 
     if basis == "budget":
         custom = list(zip(
@@ -83,12 +77,12 @@ def build_map(basis: str, scenario: str, selected_force: str | None) -> go.Figur
             DF[share_col].round(2),
             DF[harm_col].round(2),
             DF[gap_col].round(2),
-            DF["budget"] / 1_000_000,   # display in £m
+            DF["total_funding"] / 1_000_000,   # display in £m
         ))
         hovertemplate = (
             "<b>%{customdata[0]}</b><br>"
-            "Budget: £%{customdata[4]:,.1f}m<br>"
-            "Budget share: %{customdata[1]}%<br>"
+            "Total funding: £%{customdata[4]:,.0f}m<br>"
+            "Funding share: %{customdata[1]}%<br>"
             "Harm share: %{customdata[2]}%<br>"
             "Allocation gap: %{customdata[3]:+.2f} pp"
             "<extra></extra>"
@@ -314,10 +308,11 @@ def build_functions(force_name: str) -> go.Figure:
 def build_allocation(basis: str) -> go.Figure:
     """
     Diverging horizontal bars: recommended change per force under the
-    proportional (harm-share) reallocation — Option B from
-    allocation_loader.
+    reallocation baseline from allocation_loader — proportional harm-share
+    split for officers, grant equalisation (total funding toward harm share)
+    for the funding basis.
 
-    basis: "budget" plots £m, "fte" plots officer FTE.
+    basis: "budget" plots the core-grant change in £m, "fte" plots officer FTE.
 
     Colours match the map so a force keeps one colour story across the
     dashboard: green = over-resourced (harm share below current share, so the
@@ -340,14 +335,14 @@ def build_allocation(basis: str) -> go.Figure:
         custom = list(zip(current_plot, rec_plot, alloc["harm_share_pct"]))
         hovertemplate = (
             "<b>%{y}</b><br>"
-            "Current: £%{customdata[0]:,.1f}m<br>"
-            "Recommended: £%{customdata[1]:,.1f}m<br>"
+            "Current grant: £%{customdata[0]:,.1f}m<br>"
+            "Recommended grant: £%{customdata[1]:,.1f}m<br>"
             "Harm share: %{customdata[2]:.2f}%<br>"
             "Recommended change: £%{x:+,.1f}m"
             "<extra></extra>"
         )
-        cap          = 150        # £m
-        axis_title   = "Recommended change in funding (£ millions)"
+        cap          = 300        # £m
+        axis_title   = "Recommended change in core grant (£ millions)"
         met_unit_fmt = "£{:+,.0f}m"
     else:
         alloc  = ALLOCATION_FTE.sort_values("difference")
@@ -493,7 +488,7 @@ app.layout = html.Div([
                 dcc.RadioItems(
                     id="basis-toggle",
                     options=[
-                        {"label": "Budget (£)",     "value": "budget"},
+                        {"label": "Funding (£)",    "value": "budget"},
                         {"label": "Officers (FTE)", "value": "fte"},
                     ],
                     value=DEFAULT_BASIS,
@@ -655,14 +650,22 @@ app.layout = html.Div([
                     ]),
                     html.Li([
                         html.Code("police-grant-2025-26.csv"),
-                        " — central government grant per force, 2025-26 ",
+                        " — redistributable formula grant per force, 2025-26 ",
                         "(Home Office, Police Grant Report 2025-26). The ",
-                        "'Overall Total' column from the per-force table: ",
-                        "Police Main Grant + ex-DCLG Formula Funding + ",
-                        "Legacy Council Tax Grants + Welsh Top-Up. £9.81 bn ",
-                        "across 43 forces; council tax precept (locally ",
-                        "raised, ~40 % of total force funding) is excluded ",
-                        "by design."
+                        "'Overall Total' column: Police Main Grant + ex-DCLG ",
+                        "Formula Funding + Legacy Council Tax Grants + Welsh ",
+                        "Top-Up. £9.81 bn across 43 forces — the pool the ",
+                        "reallocation moves."
+                    ]),
+                    html.Li([
+                        html.Code("police-funding-england-and-wales-2015-to-"
+                                  "2026-tables.ods"),
+                        " — total funding per force, 2025-26 (Home Office, ",
+                        "Police Funding Statistics, Table 4a). Government ",
+                        "Funding + council-tax precept + ring-fenced specific ",
+                        "grants = £17.57 bn across 43 forces. The allocation ",
+                        "gap is measured on this total; precept (£6.06 bn) and ",
+                        "specific grants are held fixed when reallocating."
                     ]),
                 ], className="source-list"),
                 html.P([
@@ -677,48 +680,55 @@ app.layout = html.Div([
         ], className="methodology"),
 
         html.Details([
-            html.Summary("How the budget basis works"),
+            html.Summary("How the funding basis works"),
             html.Div([
                 html.P([
-                    "The budget basis compares each force's share of the ",
-                    "central government grant against its harm share, in ",
-                    "place of the officer-headcount comparison. The reason: ",
-                    "the evidence linking more officers to less crime is ",
-                    "contested. Reallocating funding is more defensible and ",
-                    "more flexible — a force can spend extra budget on ",
-                    "equipment, training, specialist units, victim services, ",
-                    "and so on, not only on headcount."
+                    "The funding basis compares each force's share of its ",
+                    "total funding against its harm share, in place of the ",
+                    "officer-headcount comparison. The reason: the evidence ",
+                    "linking more officers to less crime is contested. ",
+                    "Reallocating funding is more defensible and more flexible ",
+                    "— a force can spend on equipment, training, specialist ",
+                    "units, victim services, and so on, not only on headcount."
                 ]),
                 html.P([
-                    html.Span("What is in the pool. ", className="bold"),
-                    "The £9.81 bn national pool is the Police Grant Report ",
-                    "2025-26 'Overall Total' summed across the 43 territorial ",
-                    "forces: Police Main Grant, ex-DCLG Formula Funding, ",
-                    "Legacy Council Tax Grants, and the Welsh Top-Up. This is ",
-                    "roughly 60 % of total English-and-Welsh police funding."
+                    html.Span("What the gap measures. ", className="bold"),
+                    "Total funding is government grant + council-tax precept + "
+                    "ring-fenced specific grants (£17.57 bn across the 43 "
+                    "forces). Comparing each force's share of that against its "
+                    "harm share answers the natural question — is a force "
+                    "resourced in line with the harm it faces — and counts "
+                    "money a force actually has, including locally-raised "
+                    "precept."
                 ]),
                 html.P([
-                    html.Span("What is excluded — and why. ", className="bold"),
-                    "Council tax precept (the locally-raised portion, ~40 % ",
-                    "of total funding) is excluded by design. The Home Office ",
-                    "cannot redistribute precept across forces, so only the ",
-                    "centrally-controlled pool can sensibly back a national ",
-                    "reallocation recommendation. Pensions grants, NI ",
-                    "contributions, the officer-maintenance ringfence, and the ",
-                    "wider-system grants are also outside this pool — they are ",
-                    "either earmarked or do not flow to PCCs as discretionary ",
-                    "spend."
+                    html.Span("What actually moves. ", className="bold"),
+                    "Only the redistributable formula grant — the Police Grant "
+                    "Report 'Overall Total', £9.81 bn — can be reallocated. "
+                    "Each force's grant is set so its total funding moves "
+                    "toward its harm share, holding precept and specific "
+                    "grants fixed. A force funded above its harm share has its "
+                    "grant cut (to £0 at most — it cannot hand back precept), "
+                    "and the freed grant goes to under-resourced forces."
+                ]),
+                html.P([
+                    html.Span("Why precept stays fixed. ", className="bold"),
+                    "Council-tax precept (locally raised by each PCC, £6.06 bn ",
+                    "nationally) is set locally and cannot be redistributed by ",
+                    "the Home Office. It still counts toward a force's total ",
+                    "funding in the gap, but the model never moves it — so a ",
+                    "force that funds itself heavily through precept is shown ",
+                    "as already-resourced rather than as needing more grant."
                 ]),
                 html.P([
                     html.Span("Welsh forces. ", className="bold"),
-                    "Dyfed-Powys, Gwent, North Wales, and South Wales carry £0 ",
-                    "in DCLG Formula Funding and Legacy Council Tax Grants — ",
-                    "those streams are routed through the Welsh Government ",
-                    "separately. The Police Grant Report's Overall Total for ",
-                    "them therefore reflects Police Main Grant + Welsh Top-Up ",
-                    "only, which makes Welsh forces appear lower than English ",
-                    "peers of comparable size. Any like-for-like comparison ",
-                    "should treat the four Welsh entries as a known under-count."
+                    "Dyfed-Powys, Gwent, North Wales, and South Wales receive ",
+                    "DCLG Formula Funding and Legacy Council Tax Grants via the ",
+                    "Welsh Government, outside the Police Grant Report. The ",
+                    "total-funding figures (Table 4a) include that Welsh-routed ",
+                    "money, so the four Welsh forces now compare like-for-like ",
+                    "with English peers — the under-count that affected the ",
+                    "old grant-only basis is resolved."
                 ]),
                 html.P([
                     html.Span("City of London. ", className="bold"),
@@ -727,20 +737,22 @@ app.layout = html.Div([
                     "national specialism in fraud and financial crime. Its ",
                     "harm-share comparison is structurally distorted because ",
                     "fraud volumes are not joinable to the PRC Offence ",
-                    "Subgroup totals used here; treat it as an outlier."
+                    "Subgroup totals used here, so it is funded far above its ",
+                    "joinable harm and its grant floors to £0 under ",
+                    "reallocation; treat it as an outlier."
                 ]),
                 html.P([
-                    html.Span("Source: ", className="bold"),
-                    html.Code("data/raw/police-grant-2025-26.csv"),
-                    ", a 43-row extract from the Home Office Police Grant ",
-                    "Report 2025-26 'Overall Total' column. The Police Funding ",
-                    "England and Wales 2015-2026 tables (",
+                    html.Span("Sources: ", className="bold"),
+                    html.Code("police-grant-2025-26.csv"),
+                    " (formula grant, Police Grant Report 2025-26) for the ",
+                    "redistributable pool, and ",
                     html.Code("police-funding-england-and-wales-2015-to-2026-"
                               "tables.ods"),
-                    ") are also in ",
-                    html.Code("data/raw/"),
-                    " for future historical-year work; only 2025-26 is wired ",
-                    "into the dashboard for now."
+                    " Table 4a (Police Funding Statistics) for each force's ",
+                    "precept and total funding. Full release pages and ",
+                    "licensing in ",
+                    html.Code("data/raw/SOURCES.md"),
+                    "."
                 ]),
             ], className="methodology-body"),
         ], className="methodology"),
@@ -914,30 +926,30 @@ def update_basis_dependent(basis: str):
         alloc          = ALLOCATION_BUDGET
         is_optimised   = allocation_loader.IS_OPTIMISED_BUDGET
         national_pool  = (f"£{alloc['current'].sum() / 1_000_000_000:,.2f} bn "
-                          f"in central government grant")
-        formula        = "gap  =  budget share %  −  harm share %"
+                          f"redistributable formula grant")
+        formula        = "gap  =  total funding share %  −  harm share %"
         resource_word  = "funding"
-        cap_text       = "±£150 m"
+        cap_text       = "±£300 m"
 
         caption = [
             html.Span("Green", className="legend-green"),
             f" = more {resource_word} than harm suggests is needed (over-resourced). ",
             html.Span("Red",   className="legend-red"),
             f" = less {resource_word} than harm suggests (under-resourced). ",
+            "Total funding = government grant + precept + specific grants. "
             "Click a force to update the radar chart.",
         ]
         footnote = [
             html.Span("Notes. ", className="bold"),
-            "Welsh forces (Dyfed-Powys, Gwent, North Wales, South Wales) "
-            "appear lower than English peers of comparable size — their "
-            "DCLG Formula Funding and Legacy Council Tax Grants flow "
-            "through the Welsh Government separately and are not in the "
-            "redistributable pool. City of London is a national fraud / "
-            "financial-crime specialist with a tiny resident population, "
-            "so its harm-share comparison is structurally distorted.",
+            "The gap compares each force's share of total funding (grant + "
+            "council-tax precept + ring-fenced specific grants) with its share "
+            "of harm. City of London is a national fraud / financial-crime "
+            "specialist with a tiny resident population, so it is funded far "
+            "above its joinable-harm share and its grant floors to £0 under "
+            "reallocation — treat it as an outlier.",
         ]
         footnote_style = {"display": "block"}
-        title = "Proportional reallocation — budget"
+        title = "Grant reallocation — total-funding basis"
     else:
         alloc          = ALLOCATION_FTE
         is_optimised   = allocation_loader.IS_OPTIMISED_FTE
@@ -957,20 +969,36 @@ def update_basis_dependent(basis: str):
         footnote_style = {"display": "none"}
         title = "Proportional reallocation — officers"
 
-    badge_text  = "" if is_optimised else "proportional baseline"
+    baseline_word = "equalisation" if basis == "budget" else "proportional"
+    badge_text  = "" if is_optimised else f"{baseline_word} baseline"
     badge_style = {"display": "none"} if is_optimised else {"display": "inline-block"}
 
-    allocation_caption = [
-        f"Recommended change in {resource_word} if the national pool ",
-        html.Span(f"({national_pool})", className="bold"),
-        " were distributed by each force's share of harm rather than the "
-        "current formula. Same colours as the map: ",
-        html.Span("green", className="legend-green"),
-        " = over-resourced (recommend fewer), ",
-        html.Span("red", className="legend-red"),
-        f" = under-resourced (recommend more). Axis capped at {cap_text}; "
-        "hover for exact figures.",
-    ]
+    if basis == "budget":
+        allocation_caption = [
+            "Recommended change in core grant ",
+            html.Span(f"({national_pool})", className="bold"),
+            " so each force's total funding moves toward its share of harm. "
+            "Precept and ring-fenced specific grants are held fixed, so only "
+            "the grant moves — a force funded above its harm share has its "
+            "grant cut (to £0 at most). Same colours as the map: ",
+            html.Span("green", className="legend-green"),
+            " = over-resourced (recommend less grant), ",
+            html.Span("red", className="legend-red"),
+            f" = under-resourced (recommend more). Axis capped at {cap_text}; "
+            "hover for exact figures.",
+        ]
+    else:
+        allocation_caption = [
+            f"Recommended change in {resource_word} if the national pool ",
+            html.Span(f"({national_pool})", className="bold"),
+            " were distributed by each force's share of harm rather than the "
+            "current formula. Same colours as the map: ",
+            html.Span("green", className="legend-green"),
+            " = over-resourced (recommend fewer), ",
+            html.Span("red", className="legend-red"),
+            f" = under-resourced (recommend more). Axis capped at {cap_text}; "
+            "hover for exact figures.",
+        ]
 
     return (
         formula,
