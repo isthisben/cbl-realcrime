@@ -1,7 +1,9 @@
 # Source data
 
-Two Home Office Official Statistics releases. Both are open data published
-under the Open Government Licence.
+Five releases from the Home Office (Official Statistics + the Police Grant
+Report) and one harm-weight release from the University of Cambridge. All
+Home Office releases are open data published under the Open Government
+Licence.
 
 ## prc-pfa-mar2013-onwards-tables-230426.ods
 
@@ -39,6 +41,90 @@ Total (Headcount), Total (FTE).
 44 forces (43 territorial + British Transport Police). The dashboard uses
 Worker type = "Police Officer" only and the most recent snapshot (31 March
 2025).
+
+## open-data-table-police-workforce-functions-280126.ods
+
+Police workforce, England and Wales — functions open data table. Officers and
+staff categorised by their primary role under the CIPFA Police Objective
+Analysis (POA) framework. Snapshots at 31 March each year, 2015 through 2025.
+
+- Release page: https://www.gov.uk/government/statistics/police-workforce-england-and-wales-31-march-2025
+- Release date: 28 January 2026 (revised; supersedes the October 2025 publication)
+- Next update: July 2026
+- Statistician: Jodie Hargreaves, Home Office
+
+Single Data sheet, 84,957 rows. Columns:
+As at 31 March, Geocode, Force name, Region, Worker type, Ethnicity (5+1),
+Ethnicity (3+1), Sex, Function subgroup number, Function subgroup name,
+Wider function number, Wider function name, Frontline type, Total (FTE).
+
+43 territorial forces (no British Transport Police). The officer function mix
+panel uses Worker type = "Police Officer" at the 31 March 2025 snapshot,
+summed by Force name and Wider function name (12 wider POA categories). Rows
+are cross-tabbed by sex / ethnicity / frontline type; per-force percentage
+shares are unaffected because that crossing is uniform across functions. Note
+the file carries year-to-year case variants of some labels (e.g. "Local
+Policing" vs "Local policing"), which the loader merges case-insensitively.
+
+## police-grant-2025-26.csv
+
+Central government grant per police force, 2025-26 financial year.
+Hand-extracted from the Home Office *Police Grant Report (England and Wales)
+2025-26* per-force table — the 'Overall Total' column, which is the sum of:
+
+- Police Main Grant
+- ex-DCLG Formula Funding (English forces only — Welsh forces receive
+  equivalent funding via the Welsh Government)
+- Legacy Council Tax Grants (English forces only — same Welsh-routing note)
+- Welsh Top-Up (Welsh forces only)
+
+- Release page: https://www.gov.uk/government/publications/police-grant-report-england-and-wales-2025-to-2026
+- Statutory instrument laid: 5 February 2025
+- Statistician: Police Resources Unit, Home Office
+
+43 rows: force name (canonical dashboard spelling), `budget_gbp` (the column
+header is legacy; it holds the formula grant). National total reconciles to
+£9,806,553,489. This is the redistributable pool the model reallocates.
+Council tax precept (locally raised, not redistributable) is not in this
+figure; it enters the dashboard via `funding_loader` (below) as a fixed
+component of each force's total funding.
+
+Welsh forces (Dyfed-Powys, Gwent, North Wales, South Wales) appear lower
+than English peers here because two of the four component grants flow through
+the Welsh Government separately. That under-count does not distort the
+allocation gap, which is measured on total funding from
+`police-funding-england-and-wales-2015-to-2026-tables.ods` (below) — those
+totals include the Welsh-routed money.
+
+## police-funding-england-and-wales-2015-to-2026-tables.ods
+
+Home Office Police Funding England and Wales tables, 2015-16 through
+2025-26. Companion publication to the Police Grant Report — published
+annually as the Police Funding Statistics release.
+
+- Release page: https://www.gov.uk/government/statistics/police-funding-england-and-wales-2015-to-2026
+- Release date: April 2025
+- Statistician: Police Resources Unit, Home Office
+
+Thirteen sheets covering eleven financial years of total police funding by
+stream. Per-force splits live in `Table_4a` (nominal) and `Table_4b` (real
+terms): one row per force, columns grouped by year as Government Funding |
+Precept | Total, in £ million. `Table_1a/1b` give national funding by stream;
+the rest are breakdowns of wider-system and counter-terrorism funding.
+
+`funding_loader.py` reads `Table_4a` for 2025-26 (the final three data
+columns). It keeps the 43 territorial PFAs (ONS codes E23*/W15*, dropping the
+E12* region / E92/W92 country / K04 England-and-Wales aggregate rows), reads
+City of London's blank precept as £0, and converts £ million to whole pounds.
+The dashboard's allocation gap is measured on the `Total` column (grant +
+precept + ring-fenced specific grants, £17.57 bn across the 43 forces); the
+`Precept` column (£6.06 bn) and the specific grants are held fixed when the
+model reallocates. `Government Funding` here is broader than the Police Grant
+Report 'Overall Total' (it bundles ring-fenced specific grants such as the
+Met's National & International Capital City grant), which is why only the
+narrower grant report figure (`police-grant-2025-26.csv`) is treated as the
+redistributable pool. Loader validation reconciles national precept to
+£6,057,626,419.
 
 ## Cambridge-CCHI-2026-update.xlsx
 

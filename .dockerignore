@@ -1,0 +1,12 @@
+# Keep the image lean and the build reproducible. The app runs off the
+# committed snapshot (data/snapshot/) + the committed geojson, so the raw ODS,
+# the local cache, and the dev scaffolding are all excluded.
+.git
+.claude
+__pycache__/
+*.pyc
+data/cache/
+data/raw/*.ods
+exports/
+notes.md
+TODO.md

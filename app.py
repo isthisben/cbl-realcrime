@@ -3,11 +3,13 @@ Police Resource Allocation Dashboard
 TU/e 4CBLW020 — Real-World Crime project
 
 Components:
-  1. Choropleth map of allocation gap (officer share - harm share) per force
+  1. Choropleth map of allocation gap (resource share - harm share) per force
   2. Radar chart: crime profile of selected force vs national average
   3. Toggle: single CCHI per category vs subgroup-weighted per force
-  4. Officer function mix: selected force vs national across CIPFA POA functions
-  5. Proportional reallocation: recommended change in officer FTE per force
+  4. Toggle: funding basis (total funding £) vs officer basis (FTE)
+  5. Officer function mix: selected force vs national across CIPFA POA functions
+  6. Reallocation: recommended change in core grant £ (so total funding
+     tracks harm) or officer FTE
 
 Run with:  python app.py
 Then open: http://127.0.0.1:8050
@@ -21,6 +23,7 @@ import plotly.graph_objects as go
 
 import allocation_loader
 import data
+import forecast_loader
 import functions_loader
 import geo
 
@@ -32,40 +35,74 @@ DF              = data.build_dataset()
 NATIONAL_PROFILE = data.national_crime_profile(DF)
 PFA_GEOJSON     = geo.get_pfa_geojson()
 FUNCTIONS_DF    = functions_loader.load_force_function_shares(DF["force"])
-ALLOCATION_DF   = allocation_loader.load_allocation(DF)
+ALLOCATION_FTE    = allocation_loader.load_allocation(DF, basis="fte")
+ALLOCATION_BUDGET = allocation_loader.load_allocation(DF, basis="budget")
+FORECAST_DF       = forecast_loader.load_forecast(DF["force"])
 
 DEFAULT_FORCE = "Metropolitan Police"
+DEFAULT_BASIS = "budget"
 
 
 # ---------------------------------------------------------------------------
 # Figure builders
 # ---------------------------------------------------------------------------
 
-def build_map(scenario: str, selected_force: str | None) -> go.Figure:
+def build_map(basis: str, scenario: str, selected_force: str | None) -> go.Figure:
     """
     Choropleth coloured by allocation gap.
 
-    scenario: "flat" or "sub" — which weighting to use.
+    basis: "budget" or "fte" — which resource share to compare against harm.
+    scenario: "flat" or "sub" — which CCHI weighting to use.
     selected_force: outline this force more heavily.
     """
-    gap_col = f"allocation_gap_{scenario}"
+    if basis == "budget":
+        gap_col   = f"allocation_gap_funding_{scenario}"
+        share_col = "funding_share_pct"
+    else:
+        gap_col   = f"allocation_gap_{scenario}"
+        share_col = "actual_share_pct"
     harm_col = f"harm_share_pct_{scenario}"
 
-    # Cap the colour scale at ±3 percentage points. The Metropolitan Police
-    # sits around +7pp under the per-force-mix scenario and would otherwise
-    # dominate the scale, leaving every other force looking nearly white.
-    # With a tighter cap the Met saturates at full green and the rest of
-    # the country shows a useful gradient. The hover always shows the true
-    # value.
-    cmax = 3.0
+    # Cap the colour scale so the Metropolitan Police (the large over-resourced
+    # outlier under either basis — about +6pp on funding, +7pp on officers)
+    # doesn't dominate and leave every other force looking nearly white. The
+    # Met saturates at full green and the rest of the country shows a useful
+    # gradient; the hover always shows the true value. Funding gaps are tighter
+    # than officer gaps, so the funding basis uses a tighter cap.
+    cmax = 2.0 if basis == "budget" else 3.0
 
-    custom = list(zip(
-        DF["force"],
-        DF["actual_share_pct"].round(2),
-        DF[harm_col].round(2),
-        DF[gap_col].round(2),
-        DF["officer_fte"],
-    ))
+    if basis == "budget":
+        custom = list(zip(
+            DF["force"],
+            DF[share_col].round(2),
+            DF[harm_col].round(2),
+            DF[gap_col].round(2),
+            DF["total_funding"] / 1_000_000,   # display in £m
+        ))
+        hovertemplate = (
+            "<b>%{customdata[0]}</b><br>"
+            "Total funding: £%{customdata[4]:,.0f}m<br>"
+            "Funding share: %{customdata[1]}%<br>"
+            "Harm share: %{customdata[2]}%<br>"
+            "Allocation gap: %{customdata[3]:+.2f} pp"
+            "<extra></extra>"
+        )
+    else:
+        custom = list(zip(
+            DF["force"],
+            DF[share_col].round(2),
+            DF[harm_col].round(2),
+            DF[gap_col].round(2),
+            DF["officer_fte"],
+        ))
+        hovertemplate = (
+            "<b>%{customdata[0]}</b><br>"
+            "Officers: %{customdata[4]:,.0f} FTE<br>"
+            "Officer share: %{customdata[1]}%<br>"
+            "Harm share: %{customdata[2]}%<br>"
+            "Allocation gap: %{customdata[3]:+.2f} pp"
+            "<extra></extra>"
+        )
 
     fig = go.Figure(go.Choropleth(
         geojson=PFA_GEOJSON,
@@ -88,14 +125,7 @@ def build_map(scenario: str, selected_force: str | None) -> go.Figure:
         marker_line_color="#666",
         marker_line_width=0.4,
         customdata=custom,
-        hovertemplate=(
-            "<b>%{customdata[0]}</b><br>"
-            "Officers: %{customdata[4]:,} FTE<br>"
-            "Officer share: %{customdata[1]}%<br>"
-            "Harm share: %{customdata[2]}%<br>"
-            "Allocation gap: %{customdata[3]:+.2f} pp"
-            "<extra></extra>"
-        ),
+        hovertemplate=hovertemplate,
     ))
 
     # Highlight the selected force with a darker border
@@ -275,58 +305,85 @@ def build_functions(force_name: str) -> go.Figure:
     return fig
 
 
-def build_allocation() -> go.Figure:
+def build_allocation(basis: str) -> go.Figure:
     """
-    Diverging horizontal bars: recommended change in officer FTE per force
-    under the proportional (harm-share) reallocation — Option B from
-    allocation_loader.
+    Diverging horizontal bars: recommended change per force under the
+    reallocation baseline from allocation_loader — proportional harm-share
+    split for officers, grant equalisation (total funding toward harm share)
+    for the funding basis.
+
+    basis: "budget" plots the core-grant change in £m, "fte" plots officer FTE.
 
     Colours match the map so a force keeps one colour story across the
-    dashboard: green = over-resourced (harm share below officer share, so the
-    model recommends fewer officers — bar points left); red = under-resourced
+    dashboard: green = over-resourced (harm share below current share, so the
+    model recommends fewer resources — bar points left); red = under-resourced
     (recommends more — points right).
 
-    The x-axis is capped at ±2,000 FTE. Only the Metropolitan Police exceeds
-    it (the same outlier the map caps for); its bar is truncated and called
-    out, and every value is exact on hover.
+    The x-axis is capped so the Metropolitan Police (which sits well past
+    both caps under either basis — the same outlier the map caps for) doesn't
+    flatten everything else. The Met bar is truncated and called out, and
+    every value is exact on hover.
     """
-    alloc  = ALLOCATION_DF.sort_values("difference")   # most shed first
-    forces = alloc.index.tolist()
-    diffs  = alloc["difference"].tolist()
-    colors = ["#1a9850" if d < 0 else "#b2182b" for d in diffs]
-    custom = list(zip(
-        alloc["current_fte"],
-        alloc["recommended_fte"],
-        alloc["harm_share_pct"],
-    ))
-
-    cap = 2000
-
-    fig = go.Figure(go.Bar(
-        y=forces,
-        x=diffs,
-        orientation="h",
-        marker_color=colors,
-        marker_line_width=0,
-        customdata=custom,
-        hovertemplate=(
+    if basis == "budget":
+        alloc  = ALLOCATION_BUDGET.sort_values("difference")   # most shed first
+        forces = alloc.index.tolist()
+        # Plot in £ millions so the axis numbers stay legible.
+        diffs_plot   = (alloc["difference"]  / 1_000_000).tolist()
+        current_plot = (alloc["current"]     / 1_000_000).tolist()
+        rec_plot     = (alloc["recommended"] / 1_000_000).tolist()
+        colors = ["#1a9850" if d < 0 else "#b2182b" for d in diffs_plot]
+        custom = list(zip(current_plot, rec_plot, alloc["harm_share_pct"]))
+        hovertemplate = (
+            "<b>%{y}</b><br>"
+            "Current grant: £%{customdata[0]:,.1f}m<br>"
+            "Recommended grant: £%{customdata[1]:,.1f}m<br>"
+            "Harm share: %{customdata[2]:.2f}%<br>"
+            "Recommended change: £%{x:+,.1f}m"
+            "<extra></extra>"
+        )
+        cap          = 300        # £m
+        axis_title   = "Recommended change in core grant (£ millions)"
+        met_unit_fmt = "£{:+,.0f}m"
+    else:
+        alloc  = ALLOCATION_FTE.sort_values("difference")
+        forces = alloc.index.tolist()
+        diffs_plot   = alloc["difference"].tolist()
+        current_plot = alloc["current"].tolist()
+        rec_plot     = alloc["recommended"].tolist()
+        colors = ["#1a9850" if d < 0 else "#b2182b" for d in diffs_plot]
+        custom = list(zip(current_plot, rec_plot, alloc["harm_share_pct"]))
+        hovertemplate = (
             "<b>%{y}</b><br>"
             "Current: %{customdata[0]:,.0f} FTE<br>"
             "Recommended: %{customdata[1]:,.0f} FTE<br>"
             "Harm share: %{customdata[2]:.2f}%<br>"
             "Recommended change: %{x:+,.0f} FTE"
             "<extra></extra>"
-        ),
+        )
+        cap          = 2000       # FTE
+        axis_title   = "Recommended change in officers (FTE)"
+        met_unit_fmt = "{:+,.0f} FTE"
+
+    fig = go.Figure(go.Bar(
+        y=forces,
+        x=diffs_plot,
+        orientation="h",
+        marker_color=colors,
+        marker_line_width=0,
+        customdata=custom,
+        hovertemplate=hovertemplate,
     ))
 
     annotations = []
     if "Metropolitan Police" in alloc.index:
-        met = alloc.loc["Metropolitan Police", "difference"]
-        if met < -cap:
+        met_diff_plot = (alloc.loc["Metropolitan Police", "difference"]
+                         / (1_000_000 if basis == "budget" else 1))
+        if met_diff_plot < -cap:
+            label = met_unit_fmt.format(met_diff_plot)
             annotations.append(dict(
-                x=120, y="Metropolitan Police",
+                x=cap * 0.06, y="Metropolitan Police",
                 xref="x", yref="y",
-                text=f"◀ Metropolitan Police {met:+,.0f} FTE (bar truncated)",
+                text=f"◀ Metropolitan Police {label} (bar truncated)",
                 xanchor="left", yanchor="middle",
                 showarrow=False,
                 font=dict(size=9, color="#1a9850"),
@@ -344,14 +401,58 @@ def build_allocation() -> go.Figure:
             automargin=True,
         ),
         xaxis=dict(
-            title=dict(text="Recommended change in officers (FTE)",
-                       font=dict(size=11)),
+            title=dict(text=axis_title, font=dict(size=11)),
             range=[-cap, cap],
             zeroline=True, zerolinecolor="#888", zerolinewidth=1,
             gridcolor="#eef0f2",
         ),
         font=dict(size=11),
         annotations=annotations,
+    )
+    return fig
+
+
+def build_forecast(force_name: str) -> go.Figure:
+    """
+    12-month-ahead crime forecast for the selected force: total predicted
+    recorded offences per month, summed across the 13 categories.
+
+    Reads forecast_loader, which serves the SARIMAX model output once it is
+    dropped into data/raw/forecast_sarimax.{csv,parquet} and seeded synthetic
+    placeholder data until then. While placeholder data is in use the panel
+    carries a badge, so a synthetic series is never mistaken for a real one.
+    """
+    rows   = FORECAST_DF[FORECAST_DF["force"] == force_name]
+    months = sorted(rows["month"].unique())
+    total_by_month = rows.groupby("month")["y_pred"].sum().reindex(months)
+
+    fig = go.Figure(go.Scatter(
+        x=list(months),
+        y=list(total_by_month.values),
+        mode="lines+markers",
+        line=dict(color="#1f3a5f", width=2.5),
+        marker=dict(size=5, color="#1f3a5f"),
+        hovertemplate="<b>%{x}</b><br>Predicted recorded offences: %{y:,.0f}"
+                      "<extra></extra>",
+    ))
+    fig.update_layout(
+        margin=dict(l=10, r=20, t=12, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=360,
+        xaxis=dict(
+            title=dict(text="Forecast month", font=dict(size=11)),
+            tickfont=dict(size=10),
+            gridcolor="#eef0f2",
+        ),
+        yaxis=dict(
+            title=dict(text="Predicted recorded offences / month",
+                       font=dict(size=11)),
+            gridcolor="#eef0f2",
+            rangemode="tozero",
+            zeroline=False,
+        ),
+        font=dict(size=11),
     )
     return fig
 
@@ -366,18 +467,36 @@ app = dash.Dash(
     update_title=None,
 )
 
+# WSGI entrypoint for production hosting (e.g. `gunicorn app:server`). Local
+# `python app.py` still serves via app.run() at the bottom of this file.
+server = app.server
+
 app.layout = html.Div([
     html.Header([
         html.H1("Police Resource Allocation"),
         html.P([
-            "Comparing current officer distribution against a harm-weighted ",
-            "allocation using the Cambridge Crime Harm Index. ",
+            "Comparing current funding and officer distribution against a ",
+            "harm-weighted allocation using the Cambridge Crime Harm Index. ",
             html.Span("TU/e 4CBLW020", className="subtitle"),
         ]),
     ], className="app-header"),
 
     html.Section([
         html.Div([
+            html.Div([
+                html.Label("Compare allocation by", className="control-label"),
+                dcc.RadioItems(
+                    id="basis-toggle",
+                    options=[
+                        {"label": "Funding (£)",    "value": "budget"},
+                        {"label": "Officers (FTE)", "value": "fte"},
+                    ],
+                    value=DEFAULT_BASIS,
+                    className="scenario-radio",
+                    inline=True,
+                ),
+            ], className="control-group"),
+
             html.Div([
                 html.Label("CCHI weighting", className="control-label"),
                 dcc.RadioItems(
@@ -403,7 +522,9 @@ app.layout = html.Div([
                 ),
             ], className="control-group"),
         ], className="control-row"),
+    ], className="controls-bar"),
 
+    html.Section([
         html.P([
             html.Span("Single CCHI per category: ", className="bold"),
             "every force is treated as having the national mix of subgroups "
@@ -527,6 +648,25 @@ app.layout = html.Div([
                         "Cambridge Centre for Evidence-Based Policing, ",
                         "Institute of Criminology."
                     ]),
+                    html.Li([
+                        html.Code("police-grant-2025-26.csv"),
+                        " — redistributable formula grant per force, 2025-26 ",
+                        "(Home Office, Police Grant Report 2025-26). The ",
+                        "'Overall Total' column: Police Main Grant + ex-DCLG ",
+                        "Formula Funding + Legacy Council Tax Grants + Welsh ",
+                        "Top-Up. £9.81 bn across 43 forces — the pool the ",
+                        "reallocation moves."
+                    ]),
+                    html.Li([
+                        html.Code("police-funding-england-and-wales-2015-to-"
+                                  "2026-tables.ods"),
+                        " — total funding per force, 2025-26 (Home Office, ",
+                        "Police Funding Statistics, Table 4a). Government ",
+                        "Funding + council-tax precept + ring-fenced specific ",
+                        "grants = £17.57 bn across 43 forces. The allocation ",
+                        "gap is measured on this total; precept (£6.06 bn) and ",
+                        "specific grants are held fixed when reallocating."
+                    ]),
                 ], className="source-list"),
                 html.P([
                     "Provenance for every CCHI value, sensitivity check ",
@@ -538,22 +678,94 @@ app.layout = html.Div([
                 ]),
             ], className="methodology-body"),
         ], className="methodology"),
+
+        html.Details([
+            html.Summary("How the funding basis works"),
+            html.Div([
+                html.P([
+                    "The funding basis compares each force's share of its ",
+                    "total funding against its harm share, in place of the ",
+                    "officer-headcount comparison. The reason: the evidence ",
+                    "linking more officers to less crime is contested. ",
+                    "Reallocating funding is more defensible and more flexible ",
+                    "— a force can spend on equipment, training, specialist ",
+                    "units, victim services, and so on, not only on headcount."
+                ]),
+                html.P([
+                    html.Span("What the gap measures. ", className="bold"),
+                    "Total funding is government grant + council-tax precept + "
+                    "ring-fenced specific grants (£17.57 bn across the 43 "
+                    "forces). Comparing each force's share of that against its "
+                    "harm share answers the natural question — is a force "
+                    "resourced in line with the harm it faces — and counts "
+                    "money a force actually has, including locally-raised "
+                    "precept."
+                ]),
+                html.P([
+                    html.Span("What actually moves. ", className="bold"),
+                    "Only the redistributable formula grant — the Police Grant "
+                    "Report 'Overall Total', £9.81 bn — can be reallocated. "
+                    "Each force's grant is set so its total funding moves "
+                    "toward its harm share, holding precept and specific "
+                    "grants fixed. A force funded above its harm share has its "
+                    "grant cut (to £0 at most — it cannot hand back precept), "
+                    "and the freed grant goes to under-resourced forces."
+                ]),
+                html.P([
+                    html.Span("Why precept stays fixed. ", className="bold"),
+                    "Council-tax precept (locally raised by each PCC, £6.06 bn ",
+                    "nationally) is set locally and cannot be redistributed by ",
+                    "the Home Office. It still counts toward a force's total ",
+                    "funding in the gap, but the model never moves it — so a ",
+                    "force that funds itself heavily through precept is shown ",
+                    "as already-resourced rather than as needing more grant."
+                ]),
+                html.P([
+                    html.Span("Welsh forces. ", className="bold"),
+                    "Dyfed-Powys, Gwent, North Wales, and South Wales receive ",
+                    "DCLG Formula Funding and Legacy Council Tax Grants via the ",
+                    "Welsh Government, outside the Police Grant Report. The ",
+                    "total-funding figures (Table 4a) include that Welsh-routed ",
+                    "money, so the four Welsh forces now compare like-for-like ",
+                    "with English peers — the under-count that affected the ",
+                    "old grant-only basis is resolved."
+                ]),
+                html.P([
+                    html.Span("City of London. ", className="bold"),
+                    "City of London is a tiny geographic force with a small ",
+                    "resident population, a large daytime workforce, and a ",
+                    "national specialism in fraud and financial crime. Its ",
+                    "harm-share comparison is structurally distorted because ",
+                    "fraud volumes are not joinable to the PRC Offence ",
+                    "Subgroup totals used here, so it is funded far above its ",
+                    "joinable harm and its grant floors to £0 under ",
+                    "reallocation; treat it as an outlier."
+                ]),
+                html.P([
+                    html.Span("Sources: ", className="bold"),
+                    html.Code("police-grant-2025-26.csv"),
+                    " (formula grant, Police Grant Report 2025-26) for the ",
+                    "redistributable pool, and ",
+                    html.Code("police-funding-england-and-wales-2015-to-2026-"
+                              "tables.ods"),
+                    " Table 4a (Police Funding Statistics) for each force's ",
+                    "precept and total funding. Full release pages and ",
+                    "licensing in ",
+                    html.Code("data/raw/SOURCES.md"),
+                    "."
+                ]),
+            ], className="methodology-body"),
+        ], className="methodology"),
     ], className="controls"),
 
     html.Section([
         html.Div([
             html.Div([
                 html.H2("Allocation gap by force"),
-                html.Code("gap  =  officer share %  −  harm share %",
-                          className="formula"),
+                html.Code(id="map-formula", className="formula"),
             ], className="panel-header"),
-            html.P([
-                html.Span("Green", className="legend-green"),
-                " = more officers than harm suggests is needed (over-resourced). ",
-                html.Span("Red", className="legend-red"),
-                " = fewer officers than harm suggests (under-resourced). ",
-                "Click a force to update the radar chart.",
-            ], className="panel-caption"),
+            html.P(id="map-caption", className="panel-caption"),
+            html.P(id="map-footnote", className="panel-footnote"),
             dcc.Graph(
                 id="map-graph",
                 config={"displayModeBar": False},
@@ -605,42 +817,61 @@ app.layout = html.Div([
     html.Section([
         html.Div([
             html.Div(
-                [html.H2("Proportional reallocation")]
-                + ([html.Span(
-                        "proportional baseline",
-                        className="baseline-badge",
-                        title="Officers reallocated by harm share (Option B). "
-                              "Real figures from the live dataset; the ILP "
-                              "optimiser output replaces this when ready.",
-                    )] if not allocation_loader.IS_OPTIMISED else []),
+                [html.H2(id="allocation-title"),
+                 html.Span(id="allocation-badge",
+                           className="baseline-badge",
+                           title="Proportional reallocation (Option B). "
+                                 "Real figures from the live dataset; the ILP "
+                                 "optimiser output replaces this when ready.")],
                 className="panel-header",
             ),
-            html.P([
-                "Recommended change in officer numbers if the national pool "
-                f"({int(ALLOCATION_DF['current_fte'].sum()):,} FTE) were "
-                "distributed by each force's share of harm rather than the "
-                "current formula. Same colours as the map: ",
-                html.Span("green", className="legend-green"),
-                " = over-resourced (recommend fewer), ",
-                html.Span("red", className="legend-red"),
-                " = under-resourced (recommend more). Axis capped at ±2,000 "
-                "FTE; hover for exact figures.",
-            ], className="panel-caption"),
+            html.P(id="allocation-caption", className="panel-caption"),
             dcc.Graph(
-                figure=build_allocation(),
+                id="allocation-graph",
                 config={"displayModeBar": False},
             ),
         ], className="panel panel-allocation"),
     ], className="allocation-row"),
+
+    html.Section([
+        html.Div([
+            html.Div(
+                [html.H2(id="forecast-title")]
+                + ([html.Span(
+                        "placeholder data",
+                        className="mockup-badge",
+                        title="Seeded synthetic forecast — the SARIMAX model "
+                              "output is not yet in data/raw/.",
+                    )] if forecast_loader.IS_MOCKUP else []),
+                className="panel-header",
+            ),
+            html.P(
+                ["12-month-ahead forecast of total recorded offences for the "
+                 "selected force, summed across the 13 crime categories. Use "
+                 "the dropdown or click a force on the map."]
+                + ([html.Span(
+                        " Values are seeded synthetic placeholders pending the "
+                        "SARIMAX time-series model; the panel switches to the "
+                        "real forecast automatically once the model output "
+                        "lands in data/raw/.",
+                        className="mockup-note",
+                    )] if forecast_loader.IS_MOCKUP else []),
+                className="panel-caption",
+            ),
+            dcc.Graph(id="forecast-graph", config={"displayModeBar": False}),
+        ], className="panel panel-forecast"),
+    ], className="forecast-row"),
 
     html.Footer([
         html.P([
             "Crime counts: Home Office Police Recorded Crime, Police Force ",
             "Area open data tables (Mar 2013 onwards), released 23 April 2026. ",
             "Officer FTE: Home Office Police Workforce open data, snapshot ",
-            "31 March 2025, released 28 January 2026. Both reflect the ",
-            "2024/25 financial year for the 43 territorial forces of England ",
-            "and Wales.",
+            "31 March 2025, released 28 January 2026. Central grant: Home ",
+            "Office Police Grant Report 2025-26, 'Overall Total' per force. ",
+            "Crime and workforce data reflect the 2024/25 financial year; the ",
+            "grant figure is the 2025-26 settlement. 43 territorial forces of ",
+            "England and Wales.",
         ]),
         html.P([
             "Harm weights: Cambridge Crime Harm Index, 2026 update ",
@@ -667,11 +898,119 @@ app.layout = html.Div([
 
 @app.callback(
     Output("map-graph", "figure"),
+    Input("basis-toggle", "value"),
     Input("scenario-toggle", "value"),
     Input("force-dropdown", "value"),
 )
-def update_map(scenario: str, force_name: str) -> go.Figure:
-    return build_map(scenario, force_name)
+def update_map(basis: str, scenario: str, force_name: str) -> go.Figure:
+    return build_map(basis, scenario, force_name)
+
+
+@app.callback(
+    Output("map-formula", "children"),
+    Output("map-caption",  "children"),
+    Output("map-footnote", "children"),
+    Output("map-footnote", "style"),
+    Output("allocation-graph",   "figure"),
+    Output("allocation-title",   "children"),
+    Output("allocation-badge",   "children"),
+    Output("allocation-badge",   "style"),
+    Output("allocation-caption", "children"),
+    Input("basis-toggle", "value"),
+)
+def update_basis_dependent(basis: str):
+    """Single callback for everything that changes when the basis toggle
+    flips: formula text, map caption / footnote, allocation panel figure +
+    title + caption + optimised-badge visibility."""
+    if basis == "budget":
+        alloc          = ALLOCATION_BUDGET
+        is_optimised   = allocation_loader.IS_OPTIMISED_BUDGET
+        national_pool  = (f"£{alloc['current'].sum() / 1_000_000_000:,.2f} bn "
+                          f"redistributable formula grant")
+        formula        = "gap  =  total funding share %  −  harm share %"
+        resource_word  = "funding"
+        cap_text       = "±£300 m"
+
+        caption = [
+            html.Span("Green", className="legend-green"),
+            f" = more {resource_word} than harm suggests is needed (over-resourced). ",
+            html.Span("Red",   className="legend-red"),
+            f" = less {resource_word} than harm suggests (under-resourced). ",
+            "Total funding = government grant + precept + specific grants. "
+            "Click a force to update the radar chart.",
+        ]
+        footnote = [
+            html.Span("Notes. ", className="bold"),
+            "The gap compares each force's share of total funding (grant + "
+            "council-tax precept + ring-fenced specific grants) with its share "
+            "of harm. City of London is a national fraud / financial-crime "
+            "specialist with a tiny resident population, so it is funded far "
+            "above its joinable-harm share and its grant floors to £0 under "
+            "reallocation — treat it as an outlier.",
+        ]
+        footnote_style = {"display": "block"}
+        title = "Grant reallocation — total-funding basis"
+    else:
+        alloc          = ALLOCATION_FTE
+        is_optimised   = allocation_loader.IS_OPTIMISED_FTE
+        national_pool  = f"{int(alloc['current'].sum()):,} officer FTE"
+        formula        = "gap  =  officer share %  −  harm share %"
+        resource_word  = "officers"
+        cap_text       = "±2,000 FTE"
+
+        caption = [
+            html.Span("Green", className="legend-green"),
+            f" = more {resource_word} than harm suggests is needed (over-resourced). ",
+            html.Span("Red",   className="legend-red"),
+            f" = fewer {resource_word} than harm suggests (under-resourced). ",
+            "Click a force to update the radar chart.",
+        ]
+        footnote = []
+        footnote_style = {"display": "none"}
+        title = "Proportional reallocation — officers"
+
+    baseline_word = "equalisation" if basis == "budget" else "proportional"
+    badge_text  = "" if is_optimised else f"{baseline_word} baseline"
+    badge_style = {"display": "none"} if is_optimised else {"display": "inline-block"}
+
+    if basis == "budget":
+        allocation_caption = [
+            "Recommended change in core grant ",
+            html.Span(f"({national_pool})", className="bold"),
+            " so each force's total funding moves toward its share of harm. "
+            "Precept and ring-fenced specific grants are held fixed, so only "
+            "the grant moves — a force funded above its harm share has its "
+            "grant cut (to £0 at most). Same colours as the map: ",
+            html.Span("green", className="legend-green"),
+            " = over-resourced (recommend less grant), ",
+            html.Span("red", className="legend-red"),
+            f" = under-resourced (recommend more). Axis capped at {cap_text}; "
+            "hover for exact figures.",
+        ]
+    else:
+        allocation_caption = [
+            f"Recommended change in {resource_word} if the national pool ",
+            html.Span(f"({national_pool})", className="bold"),
+            " were distributed by each force's share of harm rather than the "
+            "current formula. Same colours as the map: ",
+            html.Span("green", className="legend-green"),
+            " = over-resourced (recommend fewer), ",
+            html.Span("red", className="legend-red"),
+            f" = under-resourced (recommend more). Axis capped at {cap_text}; "
+            "hover for exact figures.",
+        ]
+
+    return (
+        formula,
+        caption,
+        footnote,
+        footnote_style,
+        build_allocation(basis),
+        title,
+        badge_text,
+        badge_style,
+        allocation_caption,
+    )
 
 
 @app.callback(
@@ -708,6 +1047,16 @@ def map_click_to_dropdown(click_data, current):
 def update_functions(force_name: str):
     title = f"Officer function mix — {force_name}"
     return build_functions(force_name), title
+
+
+@app.callback(
+    Output("forecast-graph", "figure"),
+    Output("forecast-title", "children"),
+    Input("force-dropdown", "value"),
+)
+def update_forecast(force_name: str):
+    title = f"Crime forecast — {force_name}"
+    return build_forecast(force_name), title
 
 
 # ---------------------------------------------------------------------------

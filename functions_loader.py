@@ -20,14 +20,17 @@ generated from the published 2025 national breakdown, so the dashboard is
 functional before the file lands. Dropping the file into `data/raw/` flips
 `IS_MOCKUP` to False and routes through `_load_real`.
 
-`_load_real` is written against the schema of the sibling workforce table
-(`workforce_loader.py`) plus a function column, but it has NOT been run
-against the real file yet — the column names and the set of function labels
-are unverified. It therefore fails loud (raises with what it found) rather
-than risk a silent mis-parse, so the schema gets confirmed the moment the
-file is in hand. The two known reconciliation points are flagged inline:
-the function-name column and the mapping of fine POA codes up to the 12
-wider categories below.
+`_load_real` is reconciled against the 31 March 2025 release: it reads the
+`Data` sheet, filters to `Worker type == "Police Officer"` at the 2025
+snapshot, and groups the `Wider function name` column into the 12 categories
+below. The file's labels carry year-to-year case variants ('Local Policing'
+vs 'Local policing') which are merged case-insensitively; `Criminal Justice
+Arrangements` and `Dealing with the Public` map to the shorter dashboard
+names; the small 'Not stated' bucket folds into 'Other'. Percentage shares
+are unaffected by the file's sex/ethnicity/frontline cross-tabbing because
+that crossing is uniform across functions. It still fails loud on any
+unmapped label or missing column so a future schema change can't pass
+silently.
 
 National 2025 breakdown (146,442 police officers; source: handoff /
 Home Office Police Workforce Functions, snapshot 31 March 2025):
@@ -42,10 +45,19 @@ import random
 
 import pandas as pd
 
+import cache
+
 
 SOURCE = (
     pathlib.Path(__file__).parent
     / "data" / "raw" / "open-data-table-police-workforce-functions-280126.ods"
+)
+
+# Committed deploy snapshot, read when the raw ODS is absent (a host that
+# ships only the snapshot). Written by write_snapshot() / `python data.py
+# --snapshot`.
+_SNAPSHOT_FILE = (
+    pathlib.Path(__file__).parent / "data" / "snapshot" / "functions.pkl"
 )
 
 # The 12 wider POA function categories, ordered by national share (largest
@@ -134,83 +146,133 @@ def _mockup(forces: list[str]) -> pd.DataFrame:
     return df
 
 
-# Candidate column names for the function label in the real file. The Home
-# Office workforce releases are not consistent about this header across
-# tables; the first one present wins, otherwise _load_real raises and lists
-# what it actually found. ADJUST once the real file is in hand.
-_FUNCTION_COL_CANDIDATES = [
-    "Function", "Police Officer function", "Officer function",
-    "POA function", "Wider function", "Function (wider)", "CIPFA function",
-]
+# Force names in the file that differ from the dashboard's canonical list.
+_FORCE_NAME_FIXES = {
+    "London, City of":             "City of London",
+    "Hampshire and Isle of Wight": "Hampshire",
+}
+
+# The file's 'Wider function name' values (lowercased) -> dashboard category.
+# Lowercasing merges the file's year-to-year case variants ('Local Policing'
+# vs 'Local policing'; 2025 uses the lowercase forms). 'Criminal Justice
+# Arrangements' and 'Dealing with the Public' map to the shorter dashboard
+# names. The 2025 police-officer data carries no 'Not stated' FTE, but it is
+# mapped to 'Other' defensively so a stray row can never go unmapped.
+_WIDER_FUNCTION_MAP = {
+    "local policing":                "Local Policing",
+    "investigations":                "Investigations",
+    "public protection":             "Public Protection",
+    "other":                         "Other",
+    "operational support":           "Operational Support",
+    "support functions":             "Support Functions",
+    "national policing":             "National Policing",
+    "intelligence":                  "Intelligence",
+    "road policing":                 "Road Policing",
+    "criminal justice arrangements": "Criminal Justice",
+    "dealing with the public":       "Dealing with Public",
+    "investigative support":         "Investigative Support",
+    "not stated":                    "Other",
+}
 
 _SNAPSHOT_YEAR = 2025
 
+# Bump when _load_real's parsing / mapping changes the returned shares, so an
+# existing on-disk cache is rebuilt. The source-file signature handles a data
+# refresh; this covers code changes the file can't signal.
+_CACHE_VERSION = 1
+
 
 def _load_real(forces: list[str]) -> pd.DataFrame:
-    """Parse the real workforce-functions ODS. UNVERIFIED against the actual
-    file — fails loud on any schema surprise so it can be reconciled rather
-    than mis-parsed. See module docstring."""
+    """Per-force officer-function shares from the real Home Office workforce-
+    functions ODS, reconciled against the 31 March 2025 release. Filters to
+    police officers at the 2025 snapshot, maps `Wider function name` to the 12
+    dashboard categories (case-insensitive, so the file's case-variant labels
+    merge), sums FTE per force x category, and normalises to percentage shares.
+    Fails loud on a missing column or an unmapped function label."""
     df = pd.read_excel(SOURCE, sheet_name="Data", engine="odf")
 
-    force_col = "Force name" if "Force name" in df.columns else None
-    fte_col   = "Total (FTE)" if "Total (FTE)" in df.columns else None
-    func_col  = next((c for c in _FUNCTION_COL_CANDIDATES if c in df.columns), None)
-    year_col  = "As at 31 March" if "As at 31 March" in df.columns else None
-
-    if not all([force_col, fte_col, func_col]):
+    required = {"As at 31 March", "Force name", "Worker type",
+                "Wider function name", "Total (FTE)"}
+    missing = required - set(df.columns)
+    if missing:
         raise ValueError(
-            "functions_loader._load_real: the real file is present but its "
-            "schema is unverified and does not match the expected columns. "
-            f"Found columns: {list(df.columns)}. Need a force-name column "
-            f"('Force name'), an FTE column ('Total (FTE)'), and a function "
-            f"column (one of {_FUNCTION_COL_CANDIDATES}). Update functions_loader "
-            "now that the file is available, then re-run."
+            f"functions_loader._load_real: {SOURCE.name} is missing expected "
+            f"columns {sorted(missing)}. Found {list(df.columns)}."
         )
 
-    if year_col is not None:
-        df = df[df[year_col] == _SNAPSHOT_YEAR]
-
-    # NOTE: the real file's function labels are likely finer POA codes
-    # (e.g. '1a Neighbourhood') that must be rolled up to the 12 wider
-    # categories in FUNCTIONS. Build that mapping here once the labels are
-    # known; until then any label outside FUNCTIONS will surface in the
-    # validation below.
-    df = df.copy()
-    df["Total (FTE)"] = pd.to_numeric(df[fte_col], errors="coerce")
-
-    pivot = (
-        df.groupby([force_col, func_col])["Total (FTE)"]
-          .sum()
-          .unstack(fill_value=0.0)
-    )
-
-    missing_funcs = set(FUNCTIONS) - set(pivot.columns)
-    if missing_funcs:
+    df = df[(df["Worker type"] == "Police Officer")
+            & (df["As at 31 March"] == _SNAPSHOT_YEAR)].copy()
+    if df.empty:
         raise ValueError(
-            "functions_loader._load_real: parsed function labels do not cover "
-            f"the 12 wider categories. Missing {sorted(missing_funcs)}; got "
-            f"{sorted(pivot.columns)}. A POA-code -> wider-category roll-up is "
-            "probably needed — add it in _load_real."
+            f"functions_loader._load_real: no 'Police Officer' rows for "
+            f"{_SNAPSHOT_YEAR} in {SOURCE.name}."
         )
 
-    shares = pivot[FUNCTIONS].div(pivot[FUNCTIONS].sum(axis=1), axis=0) * 100.0
+    df["Force name"] = df["Force name"].replace(_FORCE_NAME_FIXES)
+    df["category"] = (df["Wider function name"].astype(str).str.strip()
+                      .str.lower().map(_WIDER_FUNCTION_MAP))
+
+    unmapped = sorted(df.loc[df["category"].isna(), "Wider function name"].unique())
+    if unmapped:
+        raise ValueError(
+            f"functions_loader._load_real: unmapped 'Wider function name' "
+            f"values {unmapped} — add them to _WIDER_FUNCTION_MAP."
+        )
+
+    df["Total (FTE)"] = pd.to_numeric(df["Total (FTE)"], errors="coerce").fillna(0.0)
+    pivot = (df.groupby(["Force name", "category"])["Total (FTE)"]
+               .sum().unstack(fill_value=0.0))
+
+    for cat in FUNCTIONS:                       # guarantee all 12 columns exist
+        if cat not in pivot.columns:
+            pivot[cat] = 0.0
+    pivot = pivot[FUNCTIONS]
+
+    shares = pivot.div(pivot.sum(axis=1), axis=0) * 100.0
     shares.index.name = "force"
     return shares.reindex(list(forces))
 
 
-def load_force_function_shares(forces: list[str] | None = None) -> pd.DataFrame:
+def load_force_function_shares(forces: list[str] | None = None, *,
+                               refresh: bool = False) -> pd.DataFrame:
     """Per-force officer-function shares as percentages (each row ~100).
 
     `forces` pins the output to exactly the dashboard's canonical force list
     (pass `DF["force"]`) so the panel can never KeyError on a selected force.
     Defaults to the keys with published anchors if not supplied.
+
+    The real-data path parses a large workforce-functions ODS, so its result
+    is cached to disk (keyed on the source file and the requested force list);
+    pass `refresh=True` to re-parse. The synthetic mockup path is cheap and
+    never cached.
     """
     global IS_MOCKUP
     force_list = list(forces) if forces is not None else sorted(_OVERRIDES)
 
     if SOURCE.exists():
         IS_MOCKUP = False
-        return _load_real(force_list)
+        src_sig = cache.file_signature(SOURCE)
+        signature = (None if src_sig is None
+                     else {"version": _CACHE_VERSION, "source": src_sig,
+                           "forces": force_list})
+        return cache.cached("functions", signature,
+                            lambda: _load_real(force_list), refresh=refresh)
+
+    # Raw functions ODS absent (e.g. a deploy host). Prefer the committed
+    # snapshot — real shares — over the synthetic mockup.
+    if _SNAPSHOT_FILE.exists():
+        IS_MOCKUP = False
+        return pd.read_pickle(_SNAPSHOT_FILE).reindex(force_list)
 
     IS_MOCKUP = True
     return _mockup(force_list)
+
+
+def write_snapshot(forces: list[str]) -> pathlib.Path:
+    """Write the committed deploy snapshot of per-force function shares
+    (data/snapshot/functions.pkl) from the raw ODS, for hosts that don't ship
+    the ODS. Called by data.write_snapshot(); requires the ODS present."""
+    shares = load_force_function_shares(list(forces))
+    _SNAPSHOT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    shares.to_pickle(_SNAPSHOT_FILE)
+    return _SNAPSHOT_FILE

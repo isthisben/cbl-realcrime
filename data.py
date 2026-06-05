@@ -19,6 +19,18 @@ Inputs:
     - data/raw/prc-pfa-mar2013-onwards-tables-230426.ods  (PRC counts)
     - data/raw/open-data-table-police-workforce-280126.ods (officer FTE)
     - data/raw/Cambridge-CCHI-2026-update.xlsx (CCHI per offence)
+    - data/raw/police-grant-2025-26.csv (redistributable formula grant)
+    - data/raw/police-funding-england-and-wales-2015-to-2026-tables.ods
+      (total funding + precept per force, Table 4a)
+
+Resource side:
+    Each force carries an officer FTE, a redistributable formula grant, a
+    council-tax precept, and a total funding figure (grant + precept +
+    ring-fenced specific grants). Two allocation gaps are produced — officer
+    share - harm share, and total-funding share - harm share - each under both
+    the flat and sub harm scenarios. The funding gap is the headline; the
+    reallocation (allocation_loader) moves only the formula grant, holding
+    precept and specific grants fixed.
 
 Methodology and per-subgroup CCHI provenance: data/raw/CCHI_SOURCES.md.
 
@@ -37,11 +49,29 @@ files we use here and are documented as known gaps:
 
 from __future__ import annotations
 
+import pathlib
+
 import pandas as pd
 
+import cache
 import cchi_loader
+import funding_loader
+import grant_loader
 import prc_loader
 import workforce_loader
+
+
+# Bump when a change in this module alters the assembled dataset (new column,
+# changed harm formula, different roll-up), so an existing on-disk cache is
+# rebuilt instead of served stale. Source-file changes invalidate the cache
+# automatically; this covers code changes that the files can't signal.
+_CACHE_VERSION = 2
+
+# Committed deploy snapshot. A host that ships only this snapshot (not the
+# ~15 MB raw ODS files) reads it directly — see build_dataset. Regenerate with
+# `python data.py --snapshot` after a data or logic change, then commit it.
+_SNAPSHOT_DIR  = pathlib.Path(__file__).parent / "data" / "snapshot"
+_SNAPSHOT_FILE = _SNAPSHOT_DIR / "dataset.pkl"
 
 
 CRIME_TYPES = [
@@ -127,18 +157,26 @@ def _category_cchi_under_national_mix(
     return out
 
 
-def build_dataset() -> pd.DataFrame:
+def _assemble_dataset() -> pd.DataFrame:
+    """Parse the source files and assemble the per-force dataset. This is the
+    expensive path (~3 min cold, dominated by the odfpy ODS reads); callers go
+    through `build_dataset`, which caches the result to disk."""
     fte_by_force       = workforce_loader.load_force_fte()
     sg_counts_by_force = prc_loader.load_force_subgroup_counts()
     cchi_by_subgroup   = cchi_loader.load_subgroup_cchi()
+    grant_by_force     = grant_loader.load_force_grant()
+    funding_by_force   = funding_loader.load_force_funding()
 
-    fte_forces   = set(fte_by_force)
-    count_forces = set(sg_counts_by_force.index)
-    common = fte_forces & count_forces
+    fte_forces     = set(fte_by_force)
+    count_forces   = set(sg_counts_by_force.index)
+    grant_forces   = set(grant_by_force)
+    funding_forces = set(funding_by_force.index)
+    common = fte_forces & count_forces & grant_forces & funding_forces
     if len(common) != 43:
         raise ValueError(
-            f"Expected 43 territorial PFAs in both sources, got {len(common)}. "
-            f"FTE={len(fte_forces)}, counts={len(count_forces)}."
+            f"Expected 43 territorial PFAs in all four sources, got {len(common)}. "
+            f"FTE={len(fte_forces)}, counts={len(count_forces)}, "
+            f"grant={len(grant_forces)}, funding={len(funding_forces)}."
         )
 
     expected_subgroups = set()
@@ -166,7 +204,10 @@ def build_dataset() -> pd.DataFrame:
 
     rows = []
     for force in sorted(common):
-        fte       = fte_by_force[force]
+        fte           = fte_by_force[force]
+        grant         = grant_by_force[force]
+        total_funding = float(funding_by_force.loc[force, "total_funding_gbp"])
+        precept       = float(funding_by_force.loc[force, "precept_gbp"])
         sg_counts = {sg: int(sg_counts_by_force.loc[force, sg]) for sg in expected_subgroups}
 
         # Per-force harm under the per-force-mix scenario: every offence
@@ -192,6 +233,13 @@ def build_dataset() -> pd.DataFrame:
         rows.append({
             "force":           force,
             "officer_fte":     fte,
+            "grant":           grant,
+            "precept":         precept,
+            "total_funding":   total_funding,
+            # Everything that is not the redistributable formula grant -
+            # precept plus ring-fenced specific grants - is held fixed when
+            # the model reallocates.
+            "fixed_funding":   total_funding - grant,
             "harm_total_flat": harm_flat,
             "harm_total_sub":  harm_sub,
             "crime_profile":   crime_profile,
@@ -202,17 +250,65 @@ def build_dataset() -> pd.DataFrame:
     df = pd.DataFrame(rows)
 
     total_fte       = df["officer_fte"].sum()
+    total_funding   = df["total_funding"].sum()
     total_harm_flat = df["harm_total_flat"].sum()
     total_harm_sub  = df["harm_total_sub"].sum()
 
-    df["actual_share_pct"]    = df["officer_fte"]     / total_fte       * 100
+    df["actual_share_pct"]    = df["officer_fte"]    / total_fte        * 100
+    df["funding_share_pct"]   = df["total_funding"]  / total_funding    * 100
     df["harm_share_pct_flat"] = df["harm_total_flat"] / total_harm_flat * 100
     df["harm_share_pct_sub"]  = df["harm_total_sub"]  / total_harm_sub  * 100
 
+    # Officer (headcount) allocation gap: officer share - harm share.
     df["allocation_gap_flat"] = df["actual_share_pct"] - df["harm_share_pct_flat"]
     df["allocation_gap_sub"]  = df["actual_share_pct"] - df["harm_share_pct_sub"]
 
+    # Funding allocation gap: total-funding share - harm share. Total funding
+    # is grant + precept + specific grants, so a force that is well funded
+    # locally (high precept) no longer looks under-resourced on grant alone.
+    df["allocation_gap_funding_flat"] = df["funding_share_pct"] - df["harm_share_pct_flat"]
+    df["allocation_gap_funding_sub"]  = df["funding_share_pct"] - df["harm_share_pct_sub"]
+
     return df
+
+
+def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFrame:
+    """The per-force dataset, served from `data/cache/dataset.pkl` when the
+    cache is warm and the source files are unchanged, else parsed fresh and
+    re-cached. This is what the app calls at startup; a warm cache turns a
+    ~3-minute cold parse into an instant load.
+
+    refresh:   ignore any existing cache and re-parse (then overwrite it).
+    use_cache: set False to bypass the cache entirely (read and write).
+
+    The cache invalidates automatically when any of the four source files
+    (PRC, workforce, CCHI, grant) changes or when `_CACHE_VERSION` is bumped.
+
+    Deploy fallback: when the raw source files are absent (a host that ships
+    only the committed snapshot), the snapshot at `data/snapshot/dataset.pkl`
+    is served directly. With neither raw files nor a snapshot present, the
+    loader's own FileNotFoundError surfaces.
+    """
+    if not use_cache:
+        return _assemble_dataset()
+
+    sources_sig = cache.file_signature(
+        prc_loader.SOURCE,
+        workforce_loader.SOURCE,
+        cchi_loader.SOURCE,
+        grant_loader.SOURCE,
+        funding_loader.SOURCE,
+    )
+    if sources_sig is None:
+        # Raw files absent (e.g. a deploy host). Serve the committed snapshot
+        # if present; otherwise fall through so _assemble_dataset raises the
+        # loader's pointing-to-SOURCES.md FileNotFoundError.
+        if _SNAPSHOT_FILE.exists():
+            return pd.read_pickle(_SNAPSHOT_FILE)
+        return _assemble_dataset()
+
+    signature = {"version": _CACHE_VERSION, "sources": sources_sig}
+    return cache.cached("dataset", signature, _assemble_dataset, refresh=refresh)
 
 
 def national_crime_profile(df: pd.DataFrame) -> dict[str, float]:
@@ -222,3 +318,52 @@ def national_crime_profile(df: pd.DataFrame) -> dict[str, float]:
             totals[ct] += v
     grand = sum(totals.values())
     return {ct: v / grand for ct, v in totals.items()}
+
+
+def write_snapshot() -> list[pathlib.Path]:
+    """Write the committed deploy snapshots (data/snapshot/) that a host reads
+    in place of the raw ODS files: the assembled dataset and the officer-
+    function shares. Run `python data.py --snapshot` after a data or logic
+    change, then commit data/snapshot/."""
+    import functions_loader
+
+    df = build_dataset()
+    _SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_pickle(_SNAPSHOT_FILE)
+    fpath = functions_loader.write_snapshot(df["force"])
+    return [_SNAPSHOT_FILE, fpath]
+
+
+if __name__ == "__main__":
+    # Warm/refresh the on-disk cache, or write the committed deploy snapshot:
+    #   python data.py            build (or reuse) the cache, report timing
+    #   python data.py --refresh  ignore any cache and re-parse the raw files
+    #   python data.py --no-cache parse without reading or writing the cache
+    #   python data.py --snapshot write data/snapshot/ for hosting, then exit
+    import argparse
+    import time
+
+    parser = argparse.ArgumentParser(
+        description="Build / refresh the dashboard dataset cache or snapshot.")
+    parser.add_argument("--refresh", action="store_true",
+                        help="Ignore any existing cache and re-parse the raw files.")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Parse without reading or writing the cache.")
+    parser.add_argument("--snapshot", action="store_true",
+                        help="Write the committed deploy snapshot "
+                             "(data/snapshot/) for hosting, then exit.")
+    args = parser.parse_args()
+
+    if args.snapshot:
+        for p in write_snapshot():
+            print(f"wrote {p} ({p.stat().st_size / 1024:.0f} KB)")
+        raise SystemExit(0)
+
+    t0 = time.perf_counter()
+    df = build_dataset(refresh=args.refresh, use_cache=not args.no_cache)
+    dt = time.perf_counter() - t0
+
+    print(f"dataset: {len(df)} forces, {len(df.columns)} columns in {dt:.2f}s")
+    cache_path = cache.CACHE_DIR / "dataset.pkl"
+    if not args.no_cache and cache_path.exists():
+        print(f"cache:   {cache_path} ({cache_path.stat().st_size / 1024:.0f} KB)")

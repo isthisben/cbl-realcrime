@@ -1,0 +1,560 @@
+force,crime_type,count_2024_25,harm_cchi_days
+Avon and Somerset,Violence and sexual offences,75318,14960431.25
+Avon and Somerset,Public order,18863,141472.5
+Avon and Somerset,Criminal damage and arson,12730,124280.0
+Avon and Somerset,Shoplifting,18275,18275.0
+Avon and Somerset,Other theft,12858,25716.0
+Avon and Somerset,Vehicle crime,10191,50955.0
+Avon and Somerset,Burglary,7234,1739909.0
+Avon and Somerset,Drugs,2901,9905.0
+Avon and Somerset,Theft from the person,768,1536.0
+Avon and Somerset,Robbery,2516,918340.0
+Avon and Somerset,Possession of weapons,1128,308790.0
+Avon and Somerset,Bicycle theft,2258,4516.0
+Avon and Somerset,Other crime,3309,33090.0
+Bedfordshire,Violence and sexual offences,20795,4320307.5
+Bedfordshire,Public order,4358,32685.0
+Bedfordshire,Criminal damage and arson,4294,46103.0
+Bedfordshire,Shoplifting,6224,6224.0
+Bedfordshire,Other theft,3948,7896.0
+Bedfordshire,Vehicle crime,5030,25150.0
+Bedfordshire,Burglary,2383,563820.5
+Bedfordshire,Drugs,1677,5885.0
+Bedfordshire,Theft from the person,492,984.0
+Bedfordshire,Robbery,542,197830.0
+Bedfordshire,Possession of weapons,525,143718.75
+Bedfordshire,Bicycle theft,523,1046.0
+Bedfordshire,Other crime,1241,12410.0
+Cambridgeshire,Violence and sexual offences,27906,5036387.0
+Cambridgeshire,Public order,5036,37770.0
+Cambridgeshire,Criminal damage and arson,6622,68327.0
+Cambridgeshire,Shoplifting,7639,7639.0
+Cambridgeshire,Other theft,5297,10594.0
+Cambridgeshire,Vehicle crime,4056,20280.0
+Cambridgeshire,Burglary,2996,708796.0
+Cambridgeshire,Drugs,1765,6235.0
+Cambridgeshire,Theft from the person,905,1810.0
+Cambridgeshire,Robbery,593,216445.0
+Cambridgeshire,Possession of weapons,1002,274297.5
+Cambridgeshire,Bicycle theft,1879,3758.0
+Cambridgeshire,Other crime,2014,20140.0
+Cheshire,Violence and sexual offences,39449,7823212.75
+Cheshire,Public order,8958,67185.0
+Cheshire,Criminal damage and arson,5816,49879.0
+Cheshire,Shoplifting,6105,6105.0
+Cheshire,Other theft,5306,10612.0
+Cheshire,Vehicle crime,2173,10865.0
+Cheshire,Burglary,2629,658821.5
+Cheshire,Drugs,3461,11325.0
+Cheshire,Theft from the person,313,626.0
+Cheshire,Robbery,434,158410.0
+Cheshire,Possession of weapons,738,202027.5
+Cheshire,Bicycle theft,736,1472.0
+Cheshire,Other crime,2201,22010.0
+City of London,Violence and sexual offences,1638,323041.5
+City of London,Public order,697,5227.5
+City of London,Criminal damage and arson,373,1844.0
+City of London,Shoplifting,1537,1537.0
+City of London,Other theft,1859,3718.0
+City of London,Vehicle crime,107,535.0
+City of London,Burglary,325,61977.5
+City of London,Drugs,575,1947.0
+City of London,Theft from the person,1463,2926.0
+City of London,Robbery,161,58765.0
+City of London,Possession of weapons,75,20531.25
+City of London,Bicycle theft,210,420.0
+City of London,Other crime,159,1590.0
+Cleveland,Violence and sexual offences,28667,5520811.25
+Cleveland,Public order,5966,44745.0
+Cleveland,Criminal damage and arson,8891,109282.0
+Cleveland,Shoplifting,8329,8329.0
+Cleveland,Other theft,4466,8932.0
+Cleveland,Vehicle crime,3698,18490.0
+Cleveland,Burglary,3779,952916.5
+Cleveland,Drugs,2979,11273.0
+Cleveland,Theft from the person,278,556.0
+Cleveland,Robbery,897,327405.0
+Cleveland,Possession of weapons,736,201480.0
+Cleveland,Bicycle theft,474,948.0
+Cleveland,Other crime,2265,22650.0
+Cumbria,Violence and sexual offences,18438,3320501.5
+Cumbria,Public order,3804,28530.0
+Cumbria,Criminal damage and arson,3844,32393.0
+Cumbria,Shoplifting,2431,2431.0
+Cumbria,Other theft,2443,4886.0
+Cumbria,Vehicle crime,840,4200.0
+Cumbria,Burglary,1059,253726.5
+Cumbria,Drugs,1993,6511.0
+Cumbria,Theft from the person,128,256.0
+Cumbria,Robbery,133,48545.0
+Cumbria,Possession of weapons,539,147551.25
+Cumbria,Bicycle theft,231,462.0
+Cumbria,Other crime,1150,11500.0
+Derbyshire,Violence and sexual offences,39522,7550305.75
+Derbyshire,Public order,9812,73590.0
+Derbyshire,Criminal damage and arson,7459,65792.0
+Derbyshire,Shoplifting,7208,7208.0
+Derbyshire,Other theft,6318,12636.0
+Derbyshire,Vehicle crime,3737,18685.0
+Derbyshire,Burglary,3103,761280.5
+Derbyshire,Drugs,2980,11024.0
+Derbyshire,Theft from the person,570,1140.0
+Derbyshire,Robbery,564,205860.0
+Derbyshire,Possession of weapons,912,249660.0
+Derbyshire,Bicycle theft,465,930.0
+Derbyshire,Other crime,1903,19030.0
+Devon and Cornwall,Violence and sexual offences,59371,13180609.0
+Devon and Cornwall,Public order,8674,65055.0
+Devon and Cornwall,Criminal damage and arson,13916,107071.0
+Devon and Cornwall,Shoplifting,11130,11130.0
+Devon and Cornwall,Other theft,9500,19000.0
+Devon and Cornwall,Vehicle crime,3461,17305.0
+Devon and Cornwall,Burglary,3854,925009.0
+Devon and Cornwall,Drugs,4840,17988.0
+Devon and Cornwall,Theft from the person,905,1810.0
+Devon and Cornwall,Robbery,621,226665.0
+Devon and Cornwall,Possession of weapons,1551,424586.25
+Devon and Cornwall,Bicycle theft,575,1150.0
+Devon and Cornwall,Other crime,2958,29580.0
+Dorset,Violence and sexual offences,21845,4729572.75
+Dorset,Public order,3938,29535.0
+Dorset,Criminal damage and arson,5217,38982.0
+Dorset,Shoplifting,5120,5120.0
+Dorset,Other theft,4428,8856.0
+Dorset,Vehicle crime,4090,20450.0
+Dorset,Burglary,2707,651174.5
+Dorset,Drugs,1261,4093.0
+Dorset,Theft from the person,356,712.0
+Dorset,Robbery,342,124830.0
+Dorset,Possession of weapons,455,124556.25
+Dorset,Bicycle theft,638,1276.0
+Dorset,Other crime,703,7030.0
+Durham,Violence and sexual offences,24451,4355863.5
+Durham,Public order,4664,34980.0
+Durham,Criminal damage and arson,8825,119764.0
+Durham,Shoplifting,7240,7240.0
+Durham,Other theft,3612,7224.0
+Durham,Vehicle crime,2680,13400.0
+Durham,Burglary,3183,778660.5
+Durham,Drugs,1461,5367.0
+Durham,Theft from the person,119,238.0
+Durham,Robbery,255,93075.0
+Durham,Possession of weapons,483,132221.25
+Durham,Bicycle theft,336,672.0
+Durham,Other crime,2046,20460.0
+Dyfed-Powys,Violence and sexual offences,19659,3144876.5
+Dyfed-Powys,Public order,3938,29535.0
+Dyfed-Powys,Criminal damage and arson,4012,38585.0
+Dyfed-Powys,Shoplifting,2034,2034.0
+Dyfed-Powys,Other theft,2337,4674.0
+Dyfed-Powys,Vehicle crime,716,3580.0
+Dyfed-Powys,Burglary,1599,390796.5
+Dyfed-Powys,Drugs,1778,5960.0
+Dyfed-Powys,Theft from the person,140,280.0
+Dyfed-Powys,Robbery,104,37960.0
+Dyfed-Powys,Possession of weapons,418,114427.5
+Dyfed-Powys,Bicycle theft,110,220.0
+Dyfed-Powys,Other crime,1032,10320.0
+Essex,Violence and sexual offences,62219,11940041.75
+Essex,Public order,11169,83767.5
+Essex,Criminal damage and arson,12694,202715.0
+Essex,Shoplifting,14575,14575.0
+Essex,Other theft,11237,22474.0
+Essex,Vehicle crime,11971,59855.0
+Essex,Burglary,5947,1462434.5
+Essex,Drugs,5997,22285.0
+Essex,Theft from the person,1145,2290.0
+Essex,Robbery,1300,474500.0
+Essex,Possession of weapons,1564,428145.0
+Essex,Bicycle theft,1248,2496.0
+Essex,Other crime,3357,33570.0
+Gloucestershire,Violence and sexual offences,21339,3852679.75
+Gloucestershire,Public order,4294,32205.0
+Gloucestershire,Criminal damage and arson,3581,63526.0
+Gloucestershire,Shoplifting,4248,4248.0
+Gloucestershire,Other theft,3660,7320.0
+Gloucestershire,Vehicle crime,2258,11290.0
+Gloucestershire,Burglary,2199,547516.5
+Gloucestershire,Drugs,1163,4107.0
+Gloucestershire,Theft from the person,235,470.0
+Gloucestershire,Robbery,375,136875.0
+Gloucestershire,Possession of weapons,434,118807.5
+Gloucestershire,Bicycle theft,565,1130.0
+Gloucestershire,Other crime,1453,14530.0
+Greater Manchester,Violence and sexual offences,136885,23368363.75
+Greater Manchester,Public order,36003,270022.5
+Greater Manchester,Criminal damage and arson,26403,337554.0
+Greater Manchester,Shoplifting,22031,22031.0
+Greater Manchester,Other theft,24516,49032.0
+Greater Manchester,Vehicle crime,17438,87190.0
+Greater Manchester,Burglary,13809,3458251.5
+Greater Manchester,Drugs,15569,60631.0
+Greater Manchester,Theft from the person,4948,9896.0
+Greater Manchester,Robbery,4560,1664400.0
+Greater Manchester,Possession of weapons,4892,1339185.0
+Greater Manchester,Bicycle theft,2438,4876.0
+Greater Manchester,Other crime,9187,91870.0
+Gwent,Violence and sexual offences,25057,4484343.25
+Gwent,Public order,7360,55200.0
+Gwent,Criminal damage and arson,6895,125420.0
+Gwent,Shoplifting,4983,4983.0
+Gwent,Other theft,3672,7344.0
+Gwent,Vehicle crime,2772,13860.0
+Gwent,Burglary,2261,547463.5
+Gwent,Drugs,1810,6958.0
+Gwent,Theft from the person,173,346.0
+Gwent,Robbery,324,118260.0
+Gwent,Possession of weapons,456,124830.0
+Gwent,Bicycle theft,275,550.0
+Gwent,Other crime,1808,18080.0
+Hampshire,Violence and sexual offences,70737,14385033.5
+Hampshire,Public order,14899,111742.5
+Hampshire,Criminal damage and arson,12978,115077.0
+Hampshire,Shoplifting,15992,15992.0
+Hampshire,Other theft,10809,21618.0
+Hampshire,Vehicle crime,8330,41650.0
+Hampshire,Burglary,6132,1485312.0
+Hampshire,Drugs,6131,21283.0
+Hampshire,Theft from the person,1058,2116.0
+Hampshire,Robbery,1047,382155.0
+Hampshire,Possession of weapons,2077,568578.75
+Hampshire,Bicycle theft,1592,3184.0
+Hampshire,Other crime,3097,30970.0
+Hertfordshire,Violence and sexual offences,33800,6084173.25
+Hertfordshire,Public order,5323,39922.5
+Hertfordshire,Criminal damage and arson,6871,57845.0
+Hertfordshire,Shoplifting,9901,9901.0
+Hertfordshire,Other theft,8317,16634.0
+Hertfordshire,Vehicle crime,6456,32280.0
+Hertfordshire,Burglary,3932,981352.0
+Hertfordshire,Drugs,2261,7447.0
+Hertfordshire,Theft from the person,996,1992.0
+Hertfordshire,Robbery,1170,427050.0
+Hertfordshire,Possession of weapons,726,198742.5
+Hertfordshire,Bicycle theft,798,1596.0
+Hertfordshire,Other crime,1767,17670.0
+Humberside,Violence and sexual offences,41625,7714100.5
+Humberside,Public order,9570,71775.0
+Humberside,Criminal damage and arson,9513,120408.0
+Humberside,Shoplifting,9317,9317.0
+Humberside,Other theft,6370,12740.0
+Humberside,Vehicle crime,3411,17055.0
+Humberside,Burglary,5168,1302298.0
+Humberside,Drugs,2455,8237.0
+Humberside,Theft from the person,507,1014.0
+Humberside,Robbery,831,303315.0
+Humberside,Possession of weapons,869,237888.75
+Humberside,Bicycle theft,1341,2682.0
+Humberside,Other crime,2742,27420.0
+Kent,Violence and sexual offences,74407,12471239.25
+Kent,Public order,8878,66585.0
+Kent,Criminal damage and arson,17665,135248.0
+Kent,Shoplifting,16847,16847.0
+Kent,Other theft,12611,25222.0
+Kent,Vehicle crime,9088,45440.0
+Kent,Burglary,5745,1434997.5
+Kent,Drugs,6350,24416.0
+Kent,Theft from the person,1018,2036.0
+Kent,Robbery,952,347480.0
+Kent,Possession of weapons,1764,482895.0
+Kent,Bicycle theft,1062,2124.0
+Kent,Other crime,5672,56720.0
+Lancashire,Violence and sexual offences,60132,11860911.0
+Lancashire,Public order,7933,59497.5
+Lancashire,Criminal damage and arson,13342,145085.0
+Lancashire,Shoplifting,10772,10772.0
+Lancashire,Other theft,10079,20158.0
+Lancashire,Vehicle crime,7598,37990.0
+Lancashire,Burglary,6889,1664181.5
+Lancashire,Drugs,3777,13425.0
+Lancashire,Theft from the person,687,1374.0
+Lancashire,Robbery,1394,508810.0
+Lancashire,Possession of weapons,1661,454698.75
+Lancashire,Bicycle theft,1021,2042.0
+Lancashire,Other crime,3723,37230.0
+Leicestershire,Violence and sexual offences,39081,8390945.25
+Leicestershire,Public order,10103,75772.5
+Leicestershire,Criminal damage and arson,9289,104954.0
+Leicestershire,Shoplifting,8614,8614.0
+Leicestershire,Other theft,7598,15196.0
+Leicestershire,Vehicle crime,6627,33135.0
+Leicestershire,Burglary,4926,1227201.0
+Leicestershire,Drugs,2816,10796.0
+Leicestershire,Theft from the person,908,1816.0
+Leicestershire,Robbery,869,317185.0
+Leicestershire,Possession of weapons,755,206681.25
+Leicestershire,Bicycle theft,1193,2386.0
+Leicestershire,Other crime,2399,23990.0
+Lincolnshire,Violence and sexual offences,25413,5469130.0
+Lincolnshire,Public order,4132,30990.0
+Lincolnshire,Criminal damage and arson,5473,90002.0
+Lincolnshire,Shoplifting,6733,6733.0
+Lincolnshire,Other theft,3858,7716.0
+Lincolnshire,Vehicle crime,2196,10980.0
+Lincolnshire,Burglary,2471,601028.5
+Lincolnshire,Drugs,1336,4954.0
+Lincolnshire,Theft from the person,214,428.0
+Lincolnshire,Robbery,389,141985.0
+Lincolnshire,Possession of weapons,392,107310.0
+Lincolnshire,Bicycle theft,597,1194.0
+Lincolnshire,Other crime,1694,16940.0
+Merseyside,Violence and sexual offences,59439,9454895.0
+Merseyside,Public order,15496,116220.0
+Merseyside,Criminal damage and arson,12528,133758.0
+Merseyside,Shoplifting,9396,9396.0
+Merseyside,Other theft,8613,17226.0
+Merseyside,Vehicle crime,5142,25710.0
+Merseyside,Burglary,4178,1016503.0
+Merseyside,Drugs,12591,41639.0
+Merseyside,Theft from the person,869,1738.0
+Merseyside,Robbery,1127,411355.0
+Merseyside,Possession of weapons,1127,308516.25
+Merseyside,Bicycle theft,1002,2004.0
+Merseyside,Other crime,3492,34920.0
+Metropolitan Police,Violence and sexual offences,261921,52564281.25
+Metropolitan Police,Public order,56132,420990.0
+Metropolitan Police,Criminal damage and arson,56424,554061.0
+Metropolitan Police,Shoplifting,93584,93584.0
+Metropolitan Police,Other theft,109830,219660.0
+Metropolitan Police,Vehicle crime,98589,492945.0
+Metropolitan Police,Burglary,52485,12718987.5
+Metropolitan Police,Drugs,45493,172843.0
+Metropolitan Police,Theft from the person,102421,204842.0
+Metropolitan Police,Robbery,34300,12519500.0
+Metropolitan Police,Possession of weapons,5631,1541486.25
+Metropolitan Police,Bicycle theft,15559,31118.0
+Metropolitan Police,Other crime,11555,115550.0
+Norfolk,Violence and sexual offences,27549,6178996.5
+Norfolk,Public order,4830,36225.0
+Norfolk,Criminal damage and arson,6396,71535.0
+Norfolk,Shoplifting,6395,6395.0
+Norfolk,Other theft,4291,8582.0
+Norfolk,Vehicle crime,1657,8285.0
+Norfolk,Burglary,2067,494854.5
+Norfolk,Drugs,2119,7231.0
+Norfolk,Theft from the person,387,774.0
+Norfolk,Robbery,373,136145.0
+Norfolk,Possession of weapons,808,221190.0
+Norfolk,Bicycle theft,794,1588.0
+Norfolk,Other crime,1867,18670.0
+North Wales,Violence and sexual offences,27535,4702880.0
+North Wales,Public order,4490,33675.0
+North Wales,Criminal damage and arson,5769,88947.0
+North Wales,Shoplifting,4813,4813.0
+North Wales,Other theft,3583,7166.0
+North Wales,Vehicle crime,1205,6025.0
+North Wales,Burglary,1753,425265.5
+North Wales,Drugs,1477,4949.0
+North Wales,Theft from the person,193,386.0
+North Wales,Robbery,171,62415.0
+North Wales,Possession of weapons,467,127841.25
+North Wales,Bicycle theft,311,622.0
+North Wales,Other crime,1382,13820.0
+North Yorkshire,Violence and sexual offences,19959,4199256.0
+North Yorkshire,Public order,2955,22162.5
+North Yorkshire,Criminal damage and arson,4711,39800.0
+North Yorkshire,Shoplifting,5661,5661.0
+North Yorkshire,Other theft,3357,6714.0
+North Yorkshire,Vehicle crime,1830,9150.0
+North Yorkshire,Burglary,2263,538110.5
+North Yorkshire,Drugs,1389,5055.0
+North Yorkshire,Theft from the person,189,378.0
+North Yorkshire,Robbery,178,64970.0
+North Yorkshire,Possession of weapons,464,127020.0
+North Yorkshire,Bicycle theft,1023,2046.0
+North Yorkshire,Other crime,1041,10410.0
+Northamptonshire,Violence and sexual offences,26250,5723420.0
+Northamptonshire,Public order,3864,28980.0
+Northamptonshire,Criminal damage and arson,4926,66216.0
+Northamptonshire,Shoplifting,6624,6624.0
+Northamptonshire,Other theft,4309,8618.0
+Northamptonshire,Vehicle crime,3804,19020.0
+Northamptonshire,Burglary,2839,695556.5
+Northamptonshire,Drugs,2879,10697.0
+Northamptonshire,Theft from the person,237,474.0
+Northamptonshire,Robbery,690,251850.0
+Northamptonshire,Possession of weapons,976,267180.0
+Northamptonshire,Bicycle theft,488,976.0
+Northamptonshire,Other crime,1418,14180.0
+Northumbria,Violence and sexual offences,54283,12085873.25
+Northumbria,Public order,12719,95392.5
+Northumbria,Criminal damage and arson,15427,234899.0
+Northumbria,Shoplifting,18322,18322.0
+Northumbria,Other theft,10288,20576.0
+Northumbria,Vehicle crime,7189,35945.0
+Northumbria,Burglary,7211,1766738.5
+Northumbria,Drugs,4386,16444.0
+Northumbria,Theft from the person,933,1866.0
+Northumbria,Robbery,1188,433620.0
+Northumbria,Possession of weapons,1547,423491.25
+Northumbria,Bicycle theft,1166,2332.0
+Northumbria,Other crime,3805,38050.0
+Nottinghamshire,Violence and sexual offences,37100,8722916.75
+Nottinghamshire,Public order,7389,55417.5
+Nottinghamshire,Criminal damage and arson,9969,115647.0
+Nottinghamshire,Shoplifting,15278,15278.0
+Nottinghamshire,Other theft,7946,15892.0
+Nottinghamshire,Vehicle crime,4716,23580.0
+Nottinghamshire,Burglary,4182,1025157.0
+Nottinghamshire,Drugs,3994,14634.0
+Nottinghamshire,Theft from the person,910,1820.0
+Nottinghamshire,Robbery,1047,382155.0
+Nottinghamshire,Possession of weapons,1659,454151.25
+Nottinghamshire,Bicycle theft,1023,2046.0
+Nottinghamshire,Other crime,2901,29010.0
+South Wales,Violence and sexual offences,45569,8409693.25
+South Wales,Public order,13787,103402.5
+South Wales,Criminal damage and arson,9784,78311.0
+South Wales,Shoplifting,13107,13107.0
+South Wales,Other theft,7057,14114.0
+South Wales,Vehicle crime,6629,33145.0
+South Wales,Burglary,3618,859383.0
+South Wales,Drugs,3968,15648.0
+South Wales,Theft from the person,879,1758.0
+South Wales,Robbery,464,169360.0
+South Wales,Possession of weapons,1025,280593.75
+South Wales,Bicycle theft,1329,2658.0
+South Wales,Other crime,2910,29100.0
+South Yorkshire,Violence and sexual offences,57927,11135216.75
+South Yorkshire,Public order,13646,102345.0
+South Yorkshire,Criminal damage and arson,14734,207710.0
+South Yorkshire,Shoplifting,15046,15046.0
+South Yorkshire,Other theft,9757,19514.0
+South Yorkshire,Vehicle crime,11460,57300.0
+South Yorkshire,Burglary,9762,2461647.0
+South Yorkshire,Drugs,5675,22455.0
+South Yorkshire,Theft from the person,1133,2266.0
+South Yorkshire,Robbery,1856,677440.0
+South Yorkshire,Possession of weapons,2116,579255.0
+South Yorkshire,Bicycle theft,863,1726.0
+South Yorkshire,Other crime,5393,53930.0
+Staffordshire,Violence and sexual offences,40337,7785844.75
+Staffordshire,Public order,8344,62580.0
+Staffordshire,Criminal damage and arson,7520,99586.0
+Staffordshire,Shoplifting,7689,7689.0
+Staffordshire,Other theft,6169,12338.0
+Staffordshire,Vehicle crime,4856,24280.0
+Staffordshire,Burglary,3916,965276.0
+Staffordshire,Drugs,2657,9459.0
+Staffordshire,Theft from the person,302,604.0
+Staffordshire,Robbery,791,288715.0
+Staffordshire,Possession of weapons,1094,299482.5
+Staffordshire,Bicycle theft,685,1370.0
+Staffordshire,Other crime,1940,19400.0
+Suffolk,Violence and sexual offences,20619,4779620.5
+Suffolk,Public order,3432,25740.0
+Suffolk,Criminal damage and arson,4731,51003.0
+Suffolk,Shoplifting,3865,3865.0
+Suffolk,Other theft,3559,7118.0
+Suffolk,Vehicle crime,1997,9985.0
+Suffolk,Burglary,1933,458565.5
+Suffolk,Drugs,1507,5395.0
+Suffolk,Theft from the person,297,594.0
+Suffolk,Robbery,213,77745.0
+Suffolk,Possession of weapons,603,165071.25
+Suffolk,Bicycle theft,474,948.0
+Suffolk,Other crime,1266,12660.0
+Surrey,Violence and sexual offences,30478,5400581.25
+Surrey,Public order,8270,62025.0
+Surrey,Criminal damage and arson,6772,61856.0
+Surrey,Shoplifting,6663,6663.0
+Surrey,Other theft,5935,11870.0
+Surrey,Vehicle crime,4808,24040.0
+Surrey,Burglary,3291,831058.5
+Surrey,Drugs,3051,11447.0
+Surrey,Theft from the person,529,1058.0
+Surrey,Robbery,502,183230.0
+Surrey,Possession of weapons,736,201480.0
+Surrey,Bicycle theft,586,1172.0
+Surrey,Other crime,2088,20880.0
+Sussex,Violence and sexual offences,53198,11793871.75
+Sussex,Public order,12475,93562.5
+Sussex,Criminal damage and arson,12610,139595.0
+Sussex,Shoplifting,20007,20007.0
+Sussex,Other theft,10586,21172.0
+Sussex,Vehicle crime,6677,33385.0
+Sussex,Burglary,5165,1226597.5
+Sussex,Drugs,4626,16594.0
+Sussex,Theft from the person,1207,2414.0
+Sussex,Robbery,1193,435445.0
+Sussex,Possession of weapons,2544,696420.0
+Sussex,Bicycle theft,1461,2922.0
+Sussex,Other crime,3543,35430.0
+Thames Valley,Violence and sexual offences,69188,13556133.25
+Thames Valley,Public order,14964,112230.0
+Thames Valley,Criminal damage and arson,14083,165050.0
+Thames Valley,Shoplifting,20033,20033.0
+Thames Valley,Other theft,15274,30548.0
+Thames Valley,Vehicle crime,12101,60505.0
+Thames Valley,Burglary,6775,1653072.5
+Thames Valley,Drugs,7161,26147.0
+Thames Valley,Theft from the person,2428,4856.0
+Thames Valley,Robbery,1838,670870.0
+Thames Valley,Possession of weapons,1573,430608.75
+Thames Valley,Bicycle theft,3364,6728.0
+Thames Valley,Other crime,3427,34270.0
+Warwickshire,Violence and sexual offences,16321,3545609.5
+Warwickshire,Public order,3267,24502.5
+Warwickshire,Criminal damage and arson,3315,33165.0
+Warwickshire,Shoplifting,3517,3517.0
+Warwickshire,Other theft,3015,6030.0
+Warwickshire,Vehicle crime,3972,19860.0
+Warwickshire,Burglary,2289,562861.5
+Warwickshire,Drugs,1167,4485.0
+Warwickshire,Theft from the person,212,424.0
+Warwickshire,Robbery,418,152570.0
+Warwickshire,Possession of weapons,552,151110.0
+Warwickshire,Bicycle theft,380,760.0
+Warwickshire,Other crime,1119,11190.0
+West Mercia,Violence and sexual offences,35915,7303960.5
+West Mercia,Public order,6755,50662.5
+West Mercia,Criminal damage and arson,7571,74617.0
+West Mercia,Shoplifting,9345,9345.0
+West Mercia,Other theft,6442,12884.0
+West Mercia,Vehicle crime,4150,20750.0
+West Mercia,Burglary,3926,956221.0
+West Mercia,Drugs,2198,8620.0
+West Mercia,Theft from the person,385,770.0
+West Mercia,Robbery,536,195640.0
+West Mercia,Possession of weapons,1084,296745.0
+West Mercia,Bicycle theft,648,1296.0
+West Mercia,Other crime,1890,18900.0
+West Midlands,Violence and sexual offences,134050,25798673.5
+West Midlands,Public order,18836,141270.0
+West Midlands,Criminal damage and arson,25005,273636.0
+West Midlands,Shoplifting,32678,32678.0
+West Midlands,Other theft,20830,41660.0
+West Midlands,Vehicle crime,29391,146955.0
+West Midlands,Burglary,15982,3944027.0
+West Midlands,Drugs,8266,28178.0
+West Midlands,Theft from the person,2596,5192.0
+West Midlands,Robbery,6806,2484190.0
+West Midlands,Possession of weapons,6164,1687395.0
+West Midlands,Bicycle theft,1924,3848.0
+West Midlands,Other crime,5963,59630.0
+West Yorkshire,Violence and sexual offences,125984,22083768.25
+West Yorkshire,Public order,26442,198315.0
+West Yorkshire,Criminal damage and arson,21883,268490.0
+West Yorkshire,Shoplifting,22663,22663.0
+West Yorkshire,Other theft,20191,40382.0
+West Yorkshire,Vehicle crime,17080,85400.0
+West Yorkshire,Burglary,15058,3710213.0
+West Yorkshire,Drugs,9004,31182.0
+West Yorkshire,Theft from the person,2587,5174.0
+West Yorkshire,Robbery,3327,1214355.0
+West Yorkshire,Possession of weapons,2119,580076.25
+West Yorkshire,Bicycle theft,1724,3448.0
+West Yorkshire,Other crime,7134,71340.0
+Wiltshire,Violence and sexual offences,18804,4199955.75
+Wiltshire,Public order,3654,27405.0
+Wiltshire,Criminal damage and arson,4143,31161.0
+Wiltshire,Shoplifting,3862,3862.0
+Wiltshire,Other theft,2677,5354.0
+Wiltshire,Vehicle crime,2105,10525.0
+Wiltshire,Burglary,1625,392327.5
+Wiltshire,Drugs,1211,4319.0
+Wiltshire,Theft from the person,197,394.0
+Wiltshire,Robbery,212,77380.0
+Wiltshire,Possession of weapons,389,106488.75
+Wiltshire,Bicycle theft,451,902.0
+Wiltshire,Other crime,964,9640.0
