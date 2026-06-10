@@ -65,7 +65,7 @@ import workforce_loader
 # changed harm formula, different roll-up), so an existing on-disk cache is
 # rebuilt instead of served stale. Source-file changes invalidate the cache
 # automatically; this covers code changes that the files can't signal.
-_CACHE_VERSION = 2
+_CACHE_VERSION = 3
 
 # Committed deploy snapshot. A host that ships only this snapshot (not the
 # ~15 MB raw ODS files) reads it directly — see build_dataset. Regenerate with
@@ -135,6 +135,11 @@ MULTI_SUBGROUP_CATEGORIES = [
     cat for cat, sgs in SUBGROUPS_BY_CATEGORY.items() if len(sgs) > 1
 ]
 
+# Forces excluded from the dashboard. Greater Manchester is absent from the
+# team's forecast and allocation model outputs (a known data.police.uk gap), so
+# it is dropped project-wide for consistency — the dashboard reports 42 forces.
+EXCLUDED_FORCES = {"Greater Manchester"}
+
 
 def _category_cchi_under_national_mix(
     cchi_by_subgroup: dict[str, float],
@@ -171,12 +176,13 @@ def _assemble_dataset() -> pd.DataFrame:
     count_forces   = set(sg_counts_by_force.index)
     grant_forces   = set(grant_by_force)
     funding_forces = set(funding_by_force.index)
-    common = fte_forces & count_forces & grant_forces & funding_forces
-    if len(common) != 43:
+    common = (fte_forces & count_forces & grant_forces & funding_forces) - EXCLUDED_FORCES
+    if len(common) != 42:
         raise ValueError(
-            f"Expected 43 territorial PFAs in all four sources, got {len(common)}. "
-            f"FTE={len(fte_forces)}, counts={len(count_forces)}, "
-            f"grant={len(grant_forces)}, funding={len(funding_forces)}."
+            f"Expected 42 PFAs (43 territorial minus {sorted(EXCLUDED_FORCES)}) in "
+            f"all four sources, got {len(common)}. FTE={len(fte_forces)}, "
+            f"counts={len(count_forces)}, grant={len(grant_forces)}, "
+            f"funding={len(funding_forces)}."
         )
 
     expected_subgroups = set()
@@ -199,7 +205,8 @@ def _assemble_dataset() -> pd.DataFrame:
             f"Missing CCHI: {missing}. Extra: {extra}."
         )
 
-    national_volume = {sg: int(sg_counts_by_force[sg].sum()) for sg in expected_subgroups}
+    sg_counts_common = sg_counts_by_force.loc[sorted(common)]
+    national_volume = {sg: int(sg_counts_common[sg].sum()) for sg in expected_subgroups}
     cchi_by_cat_natmix = _category_cchi_under_national_mix(cchi_by_subgroup, national_volume)
 
     rows = []
@@ -281,8 +288,9 @@ def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFr
     refresh:   ignore any existing cache and re-parse (then overwrite it).
     use_cache: set False to bypass the cache entirely (read and write).
 
-    The cache invalidates automatically when any of the four source files
-    (PRC, workforce, CCHI, grant) changes or when `_CACHE_VERSION` is bumped.
+    The cache invalidates automatically when any of the five source files
+    (PRC, workforce, CCHI, grant, funding) changes or when `_CACHE_VERSION`
+    is bumped.
 
     Deploy fallback: when the raw source files are absent (a host that ships
     only the committed snapshot), the snapshot at `data/snapshot/dataset.pkl`

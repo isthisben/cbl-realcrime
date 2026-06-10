@@ -32,7 +32,7 @@ OUT_DIR = pathlib.Path(__file__).parent / "exports"
 COLORSCALE = [
     [0.0, "#b2182b"],   # under-resourced
     [0.5, "#f7f7f7"],
-    [1.0, "#1a9850"],   # over-resourced
+    [1.0, "#2166ac"],   # over-resourced
 ]
 CMAX = 3.0
 
@@ -119,7 +119,7 @@ def build_comparison(df, geojson) -> go.Figure:
                   "subgroup-weighted</b><br>"
                   "<span style='font-size:12px;color:#555'>"
                   "gap = officer share % − harm share %  ·  "
-                  "<span style='color:#1a9850;font-weight:600'>green</span> "
+                  "<span style='color:#2166ac;font-weight:600'>blue</span> "
                   "over-resourced  ·  "
                   "<span style='color:#b2182b;font-weight:600'>red</span> "
                   "under-resourced</span>"),
@@ -134,7 +134,7 @@ def build_comparison(df, geojson) -> go.Figure:
             *fig.layout.annotations,
             dict(
                 text=("Same colour scale across both maps, capped at ±3 pp. "
-                      "The Metropolitan Police saturates at full green under "
+                      "The Metropolitan Police saturates at full blue under "
                       "the per-force-mix scenario (true gap ≈ +7.4 pp) — "
                       "hover any force for actual values. "
                       "<i>Crime counts: Home Office PRC 2024/25. "
