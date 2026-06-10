@@ -114,7 +114,7 @@ def build_map(basis: str, scenario: str, selected_force: str | None) -> go.Figur
         colorscale=[
             [0.0, "#b2182b"],   # under-resourced
             [0.5, "#f7f7f7"],
-            [1.0, "#1a9850"],   # over-resourced
+            [1.0, "#2166ac"],   # over-resourced
         ],
         colorbar=dict(
             title=dict(text="Allocation gap<br>(% pts)", side="top"),
@@ -315,7 +315,7 @@ def build_allocation(basis: str) -> go.Figure:
     basis: "budget" plots the core-grant change in £m, "fte" plots officer FTE.
 
     Colours match the map so a force keeps one colour story across the
-    dashboard: green = over-resourced (harm share below current share, so the
+    dashboard: blue = over-resourced (harm share below current share, so the
     model recommends fewer resources — bar points left); red = under-resourced
     (recommends more — points right).
 
@@ -331,7 +331,7 @@ def build_allocation(basis: str) -> go.Figure:
         diffs_plot   = (alloc["difference"]  / 1_000_000).tolist()
         current_plot = (alloc["current"]     / 1_000_000).tolist()
         rec_plot     = (alloc["recommended"] / 1_000_000).tolist()
-        colors = ["#1a9850" if d < 0 else "#b2182b" for d in diffs_plot]
+        colors = ["#2166ac" if d < 0 else "#b2182b" for d in diffs_plot]
         custom = list(zip(current_plot, rec_plot, alloc["harm_share_pct"]))
         hovertemplate = (
             "<b>%{y}</b><br>"
@@ -350,7 +350,7 @@ def build_allocation(basis: str) -> go.Figure:
         diffs_plot   = alloc["difference"].tolist()
         current_plot = alloc["current"].tolist()
         rec_plot     = alloc["recommended"].tolist()
-        colors = ["#1a9850" if d < 0 else "#b2182b" for d in diffs_plot]
+        colors = ["#2166ac" if d < 0 else "#b2182b" for d in diffs_plot]
         custom = list(zip(current_plot, rec_plot, alloc["harm_share_pct"]))
         hovertemplate = (
             "<b>%{y}</b><br>"
@@ -386,7 +386,7 @@ def build_allocation(basis: str) -> go.Figure:
                 text=f"◀ Metropolitan Police {label} (bar truncated)",
                 xanchor="left", yanchor="middle",
                 showarrow=False,
-                font=dict(size=9, color="#1a9850"),
+                font=dict(size=9, color="#2166ac"),
             ))
 
     fig.update_layout(
@@ -654,7 +654,7 @@ app.layout = html.Div([
                         "(Home Office, Police Grant Report 2025-26). The ",
                         "'Overall Total' column: Police Main Grant + ex-DCLG ",
                         "Formula Funding + Legacy Council Tax Grants + Welsh ",
-                        "Top-Up. £9.81 bn across 43 forces — the pool the ",
+                        "Top-Up. £9.23 bn across 42 forces — the pool the ",
                         "reallocation moves."
                     ]),
                     html.Li([
@@ -663,8 +663,8 @@ app.layout = html.Div([
                         " — total funding per force, 2025-26 (Home Office, ",
                         "Police Funding Statistics, Table 4a). Government ",
                         "Funding + council-tax precept + ring-fenced specific ",
-                        "grants = £17.57 bn across 43 forces. The allocation ",
-                        "gap is measured on this total; precept (£6.06 bn) and ",
+                        "grants = £16.69 bn across 42 forces. The allocation ",
+                        "gap is measured on this total; precept (£5.84 bn) and ",
                         "specific grants are held fixed when reallocating."
                     ]),
                 ], className="source-list"),
@@ -694,7 +694,7 @@ app.layout = html.Div([
                 html.P([
                     html.Span("What the gap measures. ", className="bold"),
                     "Total funding is government grant + council-tax precept + "
-                    "ring-fenced specific grants (£17.57 bn across the 43 "
+                    "ring-fenced specific grants (£16.69 bn across the 42 "
                     "forces). Comparing each force's share of that against its "
                     "harm share answers the natural question — is a force "
                     "resourced in line with the harm it faces — and counts "
@@ -704,7 +704,7 @@ app.layout = html.Div([
                 html.P([
                     html.Span("What actually moves. ", className="bold"),
                     "Only the redistributable formula grant — the Police Grant "
-                    "Report 'Overall Total', £9.81 bn — can be reallocated. "
+                    "Report 'Overall Total', £9.23 bn across 42 forces — can be reallocated. "
                     "Each force's grant is set so its total funding moves "
                     "toward its harm share, holding precept and specific "
                     "grants fixed. A force funded above its harm share has its "
@@ -713,8 +713,8 @@ app.layout = html.Div([
                 ]),
                 html.P([
                     html.Span("Why precept stays fixed. ", className="bold"),
-                    "Council-tax precept (locally raised by each PCC, £6.06 bn ",
-                    "nationally) is set locally and cannot be redistributed by ",
+                    "Council-tax precept (locally raised by each PCC, £5.84 bn ",
+                    "across the 42 forces) is set locally and cannot be redistributed by ",
                     "the Home Office. It still counts toward a force's total ",
                     "funding in the gap, but the model never moves it — so a ",
                     "force that funds itself heavily through precept is shown ",
@@ -870,8 +870,9 @@ app.layout = html.Div([
             "31 March 2025, released 28 January 2026. Central grant: Home ",
             "Office Police Grant Report 2025-26, 'Overall Total' per force. ",
             "Crime and workforce data reflect the 2024/25 financial year; the ",
-            "grant figure is the 2025-26 settlement. 43 territorial forces of ",
-            "England and Wales.",
+            "grant figure is the 2025-26 settlement. 42 territorial forces of ",
+            "England and Wales (Greater Manchester is excluded — absent from ",
+            "the model outputs).",
         ]),
         html.P([
             "Harm weights: Cambridge Crime Harm Index, 2026 update ",
@@ -932,7 +933,7 @@ def update_basis_dependent(basis: str):
         cap_text       = "±£300 m"
 
         caption = [
-            html.Span("Green", className="legend-green"),
+            html.Span("Blue", className="legend-blue"),
             f" = more {resource_word} than harm suggests is needed (over-resourced). ",
             html.Span("Red",   className="legend-red"),
             f" = less {resource_word} than harm suggests (under-resourced). ",
@@ -959,7 +960,7 @@ def update_basis_dependent(basis: str):
         cap_text       = "±2,000 FTE"
 
         caption = [
-            html.Span("Green", className="legend-green"),
+            html.Span("Blue", className="legend-blue"),
             f" = more {resource_word} than harm suggests is needed (over-resourced). ",
             html.Span("Red",   className="legend-red"),
             f" = fewer {resource_word} than harm suggests (under-resourced). ",
@@ -981,7 +982,7 @@ def update_basis_dependent(basis: str):
             "Precept and ring-fenced specific grants are held fixed, so only "
             "the grant moves — a force funded above its harm share has its "
             "grant cut (to £0 at most). Same colours as the map: ",
-            html.Span("green", className="legend-green"),
+            html.Span("blue", className="legend-blue"),
             " = over-resourced (recommend less grant), ",
             html.Span("red", className="legend-red"),
             f" = under-resourced (recommend more). Axis capped at {cap_text}; "
@@ -993,7 +994,7 @@ def update_basis_dependent(basis: str):
             html.Span(f"({national_pool})", className="bold"),
             " were distributed by each force's share of harm rather than the "
             "current formula. Same colours as the map: ",
-            html.Span("green", className="legend-green"),
+            html.Span("blue", className="legend-blue"),
             " = over-resourced (recommend fewer), ",
             html.Span("red", className="legend-red"),
             f" = under-resourced (recommend more). Axis capped at {cap_text}; "

@@ -300,8 +300,8 @@ html, body {
     line-height: 1.45;
 }
 
-.legend-green {
-    background: #1a9850;
+.legend-blue {
+    background: #2166ac;
     color: white;
     padding: 1px 7px;
     border-radius: 3px;
