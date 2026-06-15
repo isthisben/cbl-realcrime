@@ -1,9 +1,14 @@
 # Cambridge Crime Harm Index — values used by the dashboard
 
-This document records every CCHI value the dashboard applies to a Police
-Recorded Crime Offence Subgroup, the source row(s) those values are
-derived from, the aggregation rule used, and the assumptions and
-limitations that come with the methodology.
+This document records the CCHI weighting the dashboard applies, how the
+per-force category weights are derived from the Cambridge index, and the
+assumptions and limitations that come with the methodology.
+
+The dashboard weights harm at the **per-force, per-category** level: for each
+force and each of the 13 recorded-crime categories there is one CCHI value (in
+days), read from `data/cchi_weights_by_force_category.csv`. This is the exact
+weighting the project's ILP optimiser consumed, so the dashboard's harm picture
+and the optimiser outputs rest on one shared file.
 
 ## Source
 
@@ -13,56 +18,48 @@ Cambridge.
 
 - File: `data/raw/Cambridge-CCHI-2026-update.xlsx`
 - Sheet read: `CCHI 2026 values sheet` (1,266 rows covering 786 distinct
-  Home Office offence classifications and 1,174 ATHENA URN codes; six
-  EXPIRED rows are dropped at load time, see Coverage notes below)
+  Home Office offence classifications and 1,174 ATHENA URN codes; EXPIRED
+  rows are dropped, see Coverage notes)
 - Foundational paper: Sherman, L., Neyroud, P., Neyroud, E. (2016). *The
   Cambridge Crime Harm Index: Measuring Total Harm from Crime Based on
   Sentencing Guidelines.* Policing 10(3): 171–183.
 
-The Sherman methodology assigns each offence a starting-point sentence,
-in days, for a previously-unconvicted offender at the basic
-(least-aggravated) tier of the relevant Sentencing Council guideline.
-Custodial starting points are converted directly to days; community
-orders use unpaid-work hours; fines use the number of minimum-wage days
-needed to clear the fine. Offender history, aggravating factors, and
-mitigating factors are excluded by construction.
+The Sherman methodology assigns each offence a starting-point sentence, in
+days, for a previously-unconvicted offender at the basic (least-aggravated)
+tier of the relevant Sentencing Council guideline. Offender history,
+aggravating factors, and mitigating factors are excluded by construction.
 
-## Granularity and the aggregation rule
+## Derivation (two steps)
 
-Sherman publishes scores at the offence-code (ATHENA URN) level. The
-Police Recorded Crime PFA tables published by the Home Office only
-publish counts at the *Offence Subgroup* level. Subgroup is therefore
-the finest level at which Sherman scores can be joined to PRC volumes.
+Sherman publishes scores at the offence-code (ATHENA URN) level; the Home
+Office Police Recorded Crime PFA tables publish counts at the *Offence
+Subgroup* level. Subgroup is therefore the finest level at which Sherman
+scores join to PRC volumes. The per-force category weight is built in two
+steps:
 
-For each PRC Offence Subgroup we use the **median** CCHI of all Sherman
-2026 entries that fall under it. Median is preferred over mean for two
-reasons:
+1. **Median CCHI per PRC Offence Subgroup** — the median of all Sherman 2026
+   entries under that subgroup (table below). Median is preferred over mean
+   for robustness to right-tail outliers (firearms within `Possession of
+   weapons`, GBH-with-intent within `Violence with injury`) and to match
+   Sherman's "first rung of the ladder" principle.
 
-1. **Robustness to right-tail outliers.** Several PRC subgroups contain a
-   long-tailed distribution of severities — firearms-with-intent inside
-   `Possession of weapons`, GBH-with-intent inside `Violence with
-   injury`, class-A trafficking inside `Trafficking of drugs`. The mean
-   of these distributions sits well above the typical reported offence,
-   because the rare extremes pull it up. The median picks the central
-   value of the distribution, which more closely reflects what an
-   arbitrarily-selected reported offence in that subgroup looks like.
+2. **Volume-weighted average to the 13 categories, per force** — each
+   category's CCHI for a force is the count-weighted average of its subgroup
+   medians, using that force's own 2024/25 subgroup mix. Nine categories map
+   to a single offence severity, so they collapse to one national value
+   identical for every force. Four composite categories bundle subgroups of
+   different severity, so they vary per force. (Robbery bundles two subgroups
+   but Cambridge scores both at 365, so it is constant.)
 
-2. **Alignment with Sherman's "first rung of the ladder" principle.**
-   The 2016 paper specifies the lowest starting point for an offence,
-   not the average across severity tiers. Median per subgroup applies
-   the same logic at the aggregation level.
+This is mathematically the per-offence harm `Σ count × subgroup-CCHI`,
+re-expressed at category granularity. The dashboard reads the resulting
+per-force file directly rather than recomputing, so it shows exactly the
+numbers the ILP optimised against.
 
-A volume-weighted average across URNs *within* a subgroup would be more
-rigorous than either median or mean, but requires URN-level offence
-counts which the PRC PFA tables do not publish. The same row count and
-mean are reported alongside the median below so the sensitivity of the
-choice to median-vs-mean is auditable.
+## Subgroup CCHI values (step 1)
 
-## Subgroup CCHI values
-
-Read this table as: for the PRC Offence Subgroup in column 1, we pool
-Sherman rows whose `SUB_GROUP` is in column 2, and the value used is the
-median (column 4).
+For the PRC Offence Subgroup in column 1, pool Sherman rows whose `SUB_GROUP`
+is in column 2; the value used is the median (bold).
 
 | PRC Offence Subgroup                       | Sherman SUB_GROUP                                                                                    |   n |  min |  **median** |    mean |    max |
 |--------------------------------------------|------------------------------------------------------------------------------------------------------|----:|-----:|---:|--------:|-------:|
@@ -90,120 +87,102 @@ median (column 4).
 | Possession of weapons offences             | POSSESSION OF WEAPONS                                                                                |  40 |    1 | **273.75**|   541.2 |  2,190 |
 | Miscellaneous crimes against society       | MISC CRIMES AGAINST SOCIETY                                                                          | 145 |    1 |    **10** |    73.7 |  1,460 |
 
-These numbers are reproduced live by `cchi_loader.load_subgroup_cchi()`
-from the source spreadsheet — the dashboard does not hold a hard-coded
-copy of them, so future Sherman updates are picked up by re-running.
+## Per-force category weights (step 2)
 
-## National-mix CCHI per dashboard category
+`cchi_loader.load_force_category_cchi()` reads
+`data/cchi_weights_by_force_category.csv` — one row per force × category. Nine
+categories carry a single national weight; four vary per force:
 
-For the "single CCHI per category" mode the dashboard computes one CCHI
-per category as the volume-weighted average of its subgroup CCHIs,
-weighted by national 2024/25 PRC counts:
+| Category                     | Per force? | Value / range (days) | Notes                                                            |
+|------------------------------|:----------:|---------------------:|------------------------------------------------------------------|
+| Robbery                      |     no     |              365.00  | two subgroups, both 365 — mix is irrelevant                      |
+| Possession of weapons        |     no     |              273.75  | single subgroup                                                  |
+| Other crime                  |     no     |               10.00  | single subgroup (Misc crimes against society)                    |
+| Public order                 |     no     |                7.50  | single subgroup                                                  |
+| Vehicle crime                |     no     |                5.00  | single subgroup                                                  |
+| Other theft                  |     no     |                2.00  | single subgroup                                                  |
+| Theft from the person        |     no     |                2.00  | single subgroup                                                  |
+| Bicycle theft                |     no     |                2.00  | single subgroup                                                  |
+| Shoplifting                  |     no     |                1.00  | single subgroup                                                  |
+| Violence and sexual offences |   **yes**  |        159.07 – 235.12 | 7 subgroups, homicide 5,475 … harassment 10                     |
+| Burglary                     |   **yes**  |        190.70 – 252.52 | residential 273.5 / non-residential 183.5                       |
+| Criminal damage and arson    |   **yes**  |          4.94 – 18.19 | arson 185 / criminal damage 2                                   |
+| Drugs                        |   **yes**  |           3.25 – 3.96 | trafficking 5 / possession 3                                    |
 
-| Category                     | National-mix CCHI | Notes                                                                                |
-|------------------------------|------------------:|--------------------------------------------------------------------------------------|
-| Violence and sexual offences |            194.21 | 7 subgroups; weighted heavily by violence-without-injury and stalking volume         |
-| Burglary                     |            244.68 | residential 68% / non-residential 32% nationally                                     |
-| Robbery                      |            365.00 | both subgroups carry the same CCHI; mix is irrelevant                                |
-| Possession of weapons        |            273.75 | single subgroup                                                                      |
-| Criminal damage and arson    |             11.18 | criminal damage 95% / arson 5% nationally; arson dominates harm despite low volume   |
-| Public order                 |              7.50 | single subgroup                                                                      |
-| Other crime                  |             10.00 | single subgroup (Misc crimes against society)                                        |
-| Vehicle crime                |              5.00 | single subgroup                                                                      |
-| Drugs                        |              3.66 | possession 67% / trafficking 33% nationally; both subgroups have low median CCHIs    |
-| Other theft                  |              2.00 | single subgroup                                                                      |
-| Theft from the person        |              2.00 | single subgroup                                                                      |
-| Bicycle theft                |              2.00 | single subgroup                                                                      |
-| Shoplifting                  |              1.00 | single subgroup                                                                      |
+A force with a more severe within-category mix (more residential burglary, or
+more homicide/rape within violence) earns a heavier weight per offence.
 
-For the eight single-subgroup categories the national-mix CCHI is
-identical to the subgroup CCHI; the toggle between "single CCHI per
-category" and "subgroup-weighted per force" has no effect on those.
-The toggle only meaningfully differs for the five multi-subgroup
-categories: Violence and sexual offences, Burglary, Criminal damage and
-arson, Drugs, Robbery.
+## Anti-social behaviour — the floor
+
+ASB is the single highest-volume category a force handles, but it is logged as
+incidents, not notifiable crime, so it has no Cambridge CCHI score and is
+absent from the PRC tables. To represent it without distorting a harm total
+dominated by violence and burglary, the dashboard sets it at the harm **floor**
+— CCHI = 1 day per incident (`cchi_loader.ASB_FLOOR_CCHI`), the value Cambridge
+gives the lowest notifiable offence (shoplifting). ASB volumes are
+forecast-derived (`asb_loader`, from the LightGBM forecast, data.police.uk
+lineage), so ASB appears as a labelled 14th radar axis and a small additive
+harm term (~0.17% of national harm) — never folded silently into the recorded
+figures.
+
+## Recorded now, forecast for allocation
+
+The map and radar score harm on **recorded** crime (PRC 2024/25) — the harm
+forces face today. The ILP allocation was optimised against **forecast** harm
+(predicted next 12 months) under these same weights. The two track each other
+closely (≈0.998 correlation on harm share) without being identical, because the
+optimiser ran on the team's own forecast extract: diagnose on actuals, optimise
+on the forecast.
 
 ## Coverage notes
 
 - The `Expired offences` sheet (17 rows) lists Home Office classifications
   retired before the 2024/25 PRC reporting period (e.g. pre-2017 burglary
-  classifications expired 31/03/17, aggravated burglary residential
-  expired 2023-05-01). These offences do not appear in the 2024/25 PRC
-  data and are excluded.
-- Six rows in the main values sheet also carry `EXPIRED` in
-  `FULL_OFFENCE_TITLE` (one in `BURGLARY IN A DWELLING`, one in
-  `VIOLENCE WITHOUT INJURY`, one in `NON-NOTIFIABLE`, three with no
-  `SUB_GROUP`). These are filtered out globally in
-  `cchi_loader._load_values_sheet` so a retired offence code's CCHI
-  cannot pull the median for the active codes that share its subgroup.
-  The Residential burglary median in particular falls from 365 (with
-  the expired pre-2017 "burglary in a dwelling with intent" row at
-  CCHI = 730 included) to 273.5 (n = 12, the active codes only).
-- The `Offences need clarity` sheet (3 rows: Magistrates' Courts Act,
-  Prison Act, Local Government Misc Provisions Acts catch-alls) carries
-  no resolved subgroup mapping in Sherman 2026 and is excluded.
-- Sherman's `SUB_GROUP` column matches the PRC Offence Subgroup label
-  exactly for 14 of the 23 subgroups. The remaining 9 are resolved by:
-    1. Pooling multiple Sherman SUB_GROUPs — Residential burglary
-       (`BURGLARY - RESIDENTIAL` + `BURGLARY IN A DWELLING`), Public
-       order offences (4 labels), Vehicle offences (4 labels).
-    2. Dropping a trailing `offences` from the PRC label — Rape
-       offences → `RAPE`, Other theft offences → `OTHER THEFT`,
-       Possession of weapons offences → `POSSESSION OF WEAPONS`.
-    3. Other label restructures — Non-residential burglary →
-       `BURGLARY - BUSINESS AND COMMUNITY`; Miscellaneous crimes
-       against society → `MISC CRIMES AGAINST SOCIETY` (abbreviation).
-    4. `FULL_OFFENCE_TITLE` pattern — Death or serious injury -
-       unlawful driving (no dedicated Sherman SUB_GROUP).
-
-  The mapping lives in `cchi_loader.PRC_TO_SHERMAN_SUBGROUP`.
+  classifications). These do not appear in the 2024/25 PRC data and are
+  excluded.
+- Six rows in the main values sheet carry `EXPIRED` in `FULL_OFFENCE_TITLE`
+  and are filtered out so a retired offence code's CCHI cannot pull the median
+  for the active codes that share its subgroup. The Residential burglary median
+  in particular falls from 365 (with the expired pre-2017 row at CCHI = 730
+  included) to 273.5 (n = 12, active codes only).
+- The `Offences need clarity` sheet (3 rows) carries no resolved subgroup
+  mapping in Sherman 2026 and is excluded.
+- The PRC subgroup → dashboard category roll-up lives in
+  `prc_loader.SUBGROUP_TO_CATEGORY`. The subgroup-median values in the table
+  above were derived from the Cambridge file with that mapping; the live
+  pipeline now reads the per-force category file produced from them.
 
 ## Documented deviations from the Sherman methodology
 
-1. **Proactively-detected offences are included.** Sherman 2016 (page
-   172) recommends excluding drug arrests, traffic arrests, and
-   shop-detective shoplifting from the harm count base, on the grounds
-   that their volume reflects police resourcing rather than crime
-   patterns. The dashboard includes these because its purpose is to
-   measure police *workload*-relevant harm — drug enforcement and
-   shoplifting are real demands on police time even if they would bias a
-   citizen-reported harm index. This is a deliberate departure from
-   Sherman's recommended scope; it should be defended on its own merits
-   in any methodological discussion rather than presented as
-   Sherman-pure.
+1. **Proactively-detected offences are included.** Sherman 2016 (p. 172)
+   recommends excluding drug arrests, traffic arrests, and shop-detective
+   shoplifting, on the grounds their volume reflects police resourcing rather
+   than crime patterns. The dashboard includes these because its purpose is to
+   measure police *workload*-relevant harm. This is a deliberate departure from
+   Sherman's recommended scope and should be defended on its own merits, not
+   presented as Sherman-pure.
 
 2. **Resolution-rate term is dropped.** The full Sherman formula is
-   `count × CCHI × (1 − clearance_rate)`. The Home Office Outcomes Open
-   Data Tables only publish per-force breakdowns for fraud offences, not
-   for the categories the dashboard reports against. The dashboard
-   therefore uses `count × CCHI` and treats the resolution-rate term as
-   uniform across forces. Reintroducing it is a one-line change once
-   per-force clearance data lands (data.police.uk record-level outcomes
-   pipeline).
+   `count × CCHI × (1 − clearance_rate)`. The Home Office Outcomes Open Data
+   Tables only publish per-force breakdowns for fraud, so the dashboard uses
+   `count × CCHI` and treats clearance as uniform across forces. Reintroducing
+   it is a one-line change once per-force clearance data lands.
 
-3. **Subgroup-level rather than URN-level aggregation.** Sherman's index
-   is most rigorous at the URN level. PRC PFA tables do not publish URN
-   counts, so subgroup is the finest available joinable level. Going to
-   URN granularity would require pulling data.police.uk record-level
-   data — out of scope for this dashboard but documented as a future
-   improvement.
+3. **Subgroup-level rather than URN-level aggregation.** Sherman's index is
+   most rigorous at URN level. PRC PFA tables do not publish URN counts, so
+   subgroup is the finest available joinable level.
 
 ## Known limitations
 
-- **Anti-social behaviour** is not in PRC; it is recorded as an incident
-  rather than a notifiable crime. The radar carries 13 axes rather than
-  14 for this reason. ASB exists in the data.police.uk record-level data
-  and could be added with a separate harm weight if that pipeline is
-  integrated.
-- **Single-CCHI-per-subgroup compromises** are unavoidable for subgroups
-  with bimodal severity distributions (Drugs: class A vs class B/C;
-  Possession of weapons: bladed article vs firearms). Median is robust
-  but understates harm where rare-but-severe offences carry meaningful
-  volume share. The mean column above quantifies this gap per subgroup.
-- **Sherman's CCHI itself** uses sentencing-day equivalents as a proxy
-  for harm, which is philosophically debatable — a victim of an
-  18-month-tariff offence may experience harm differently from a
-  sentencing-day-equivalent suggests. The CCHI is a transparent and
-  reproducible *proxy*, not a victim-experience scale.
+- **Anti-social behaviour volumes are forecast-derived**, not recorded crime
+  (see the floor section). They are the one input not drawn from a Home Office
+  recorded-crime table, which is why the ASB axis/term is labelled as such
+  everywhere it appears.
+- **Single-CCHI-per-subgroup compromises** are unavoidable for subgroups with
+  bimodal severity (Drugs: class A vs B/C; Possession of weapons: bladed vs
+  firearms). Median is robust but understates harm where rare-but-severe
+  offences carry meaningful volume; the mean column above quantifies this gap.
+- **Sherman's CCHI** uses sentencing-day equivalents as a transparent,
+  reproducible *proxy* for harm, not a victim-experience scale.
 - **English & Welsh-only.** Sentencing Council guidelines do not cover
   Scotland, so the index would not transfer to Police Scotland data.

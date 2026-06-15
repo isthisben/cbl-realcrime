@@ -1,9 +1,19 @@
 # Source data
 
 Five releases from the Home Office (Official Statistics + the Police Grant
-Report) and one harm-weight release from the University of Cambridge. All
-Home Office releases are open data published under the Open Government
-Licence.
+Report) and one harm-weight release from the University of Cambridge — all open
+data published under the Open Government Licence (Home Office) or Creative
+Commons (Cambridge). Two further inputs are produced inside the project: the
+per-force CCHI weight file (derived from the Cambridge index — see
+`CCHI_SOURCES.md`) and the model team's forecast + ILP outputs (see "Model team
+outputs" below).
+
+**Scope note.** The raw Home Office releases cover the 43 territorial police
+forces of England and Wales. The dashboard reports **42** of them — Greater
+Manchester is dropped project-wide because it is absent from the model team's
+forecast and ILP outputs. So where a file below is described as covering "43
+forces" that is the raw release; the assembled dashboard totals (e.g. £16.69 bn
+total funding, 138,331 officer FTE) are over the 42 forces in scope.
 
 ## prc-pfa-mar2013-onwards-tables-230426.ods
 
@@ -168,3 +178,52 @@ to days; community orders use unpaid-work hours; fines use the number of
 minimum-wage days needed to clear the fine. The methodology and
 aggregation rule used by the dashboard are documented in
 `data/raw/CCHI_SOURCES.md`.
+
+## Model team outputs (forecast + ILP)
+
+Produced inside the project by the predictor / optimisation teammates, not
+downloaded. They are committed so the dashboard and its deploy ship with them.
+The raw deliverables were normalised into the files below — long force names
+("X Constabulary" / "X Police") mapped to the canonical 42, and the monthly
+forecast kept in long format.
+
+### data/raw/forecast_lgbm.csv
+
+12-month crime forecast per force × category, from a LightGBM model
+(`force, crime_type, month, y_pred`; 42 forces × 14 categories × 12 months over
+the window March 2026 – February 2027). Normalised from the team's
+`forecast_2026_03_to_2027_02.csv` (Vlad) — long force names mapped to the
+canonical 42. Covers the 13 recorded categories plus anti-social behaviour.
+The "predict" layer of the project; also the source of ASB volumes; the exact
+forecast the ILP optimised against. Read by `forecast_loader.py`.
+
+### data/raw/asb_counts.csv
+
+Per-force annual anti-social-behaviour volume (`force, asb_annual_count`),
+summed from the ASB rows of the forecast above. ASB has no CCHI score and is
+absent from the PRC tables, so it is the one harm input that is
+forecast-derived; it is weighted at the CCHI floor (1). Read by `asb_loader.py`.
+
+### data/raw/ilp/
+
+The team's ILP optimiser outputs, optimised against forecast harm under the
+per-force CCHI weights. Read by `allocation_loader.py` for the reallocation
+panels.
+
+- `Pool_1_Patrol_…`, `Pool_2_Investigators_…`, `Pool_3_PCSOs_…`,
+  `all_pools_allocation_results.csv` — workforce reallocation across three
+  pools (42 forces; each pool's national FTE total is conserved).
+- `grant_redistribution_result.csv` — formula-grant redistribution toward harm
+  share (41 forces; City of London, a fraud specialist, sits outside the grant
+  model).
+
+### data/raw/hotspots.csv
+
+Top-five stop-and-search hotspots per force, extracted from the data.police.uk
+stop-and-search records (2023–2026): for each force, the five locations with the
+most recorded searches. Columns `force, rank, Latitude, Longitude, searches,
+linked_finds, find_rate`, where `find_rate = linked_finds / searches` is the
+share of searches at that location that led to a linked outcome. Stop-and-search
+data is published for 39 of the 42 forces, so Gwent, South Yorkshire and
+Warwickshire are absent. Force names are data.police.uk slugs, normalised to the
+canonical names in `hotspots_loader.py`. Read by `hotspots_loader.py`.

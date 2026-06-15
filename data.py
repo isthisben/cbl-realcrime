@@ -1,50 +1,33 @@
 """
-Police resource allocation dataset.
+Builds the per-force allocation dataset.
 
-Builds a per-force DataFrame with officer FTE, recorded crime counts across
-23 PRC Offence Subgroups (rolled up to 13 dashboard categories), and harm
-totals under two CCHI weighting scenarios:
+Per force: officer FTE, recorded crime across the 13 categories, the funding
+figures, and a harm total = Σ (category count × per-force CCHI) + an ASB floor
+term. The CCHI weights come from `cchi_loader` (nine national-value categories,
+four per-force composites) and are the same weights the model team's ILP used,
+so the map and the optimiser rest on one source.
 
-    flat:  per-force harm uses each category's *national-mix* CCHI — for
-           every multi-subgroup category we replace the force's actual
-           subgroup share with the national share. Single-subgroup
-           categories are unaffected.
+ASB has no CCHI score and isn't in the recorded-crime tables, so it sits at the
+harm floor (CCHI = 1) on forecast-derived volumes — a 14th radar axis and a
+small additive harm term, always flagged as forecast-derived.
 
-    sub:   per-force harm uses each force's own subgroup mix. Forces with
-           a more severe mix (e.g. heavier residential vs non-residential
-           burglary, or higher rape/homicide share within violence) get a
-           heavier effective weight per offence.
+Two allocation gaps are produced, both `resource share − harm share`: officer
+headcount, and total funding (the headline). Only the formula grant is
+redistributable; precept and specific grants are held fixed. Harm here is
+*recorded* crime (2024/25) — today's picture; the ILP was optimised against the
+*forecast* under the same weights (diagnose / predict / optimise). Resolution
+rate is dropped from the formula because the Home Office only publishes
+per-force clearance for fraud.
 
 Inputs:
-    - data/raw/prc-pfa-mar2013-onwards-tables-230426.ods  (PRC counts)
-    - data/raw/open-data-table-police-workforce-280126.ods (officer FTE)
-    - data/raw/Cambridge-CCHI-2026-update.xlsx (CCHI per offence)
-    - data/raw/police-grant-2025-26.csv (redistributable formula grant)
-    - data/raw/police-funding-england-and-wales-2015-to-2026-tables.ods
-      (total funding + precept per force, Table 4a)
+    data/raw/prc-pfa-mar2013-onwards-tables-230426.ods    PRC crime counts
+    data/raw/open-data-table-police-workforce-280126.ods  officer FTE
+    data/cchi_weights_by_force_category.csv               per-force CCHI weights
+    data/raw/asb_counts.csv                               forecast-derived ASB
+    data/raw/police-grant-2025-26.csv                     formula grant
+    data/raw/police-funding-...-2026-tables.ods           total funding + precept
 
-Resource side:
-    Each force carries an officer FTE, a redistributable formula grant, a
-    council-tax precept, and a total funding figure (grant + precept +
-    ring-fenced specific grants). Two allocation gaps are produced — officer
-    share - harm share, and total-funding share - harm share - each under both
-    the flat and sub harm scenarios. The funding gap is the headline; the
-    reallocation (allocation_loader) moves only the formula grant, holding
-    precept and specific grants fixed.
-
-Methodology and per-subgroup CCHI provenance: data/raw/CCHI_SOURCES.md.
-
-Two categories the original specification carried have no source in the
-files we use here and are documented as known gaps:
-
-    - Anti-social behaviour: not in police recorded crime; recorded as
-      incidents rather than crimes. Dropped (radar shows 13 axes, not 14).
-
-    - Resolution rate per force: outcomes-mar25 only publishes per-force
-      breakdowns for fraud. Dropped from the harm formula. Harm is
-      count * weight rather than count * weight * (1 - resolution_rate).
-      Adding it back is one constant-multiplier line once per-force
-      outcome data lands.
+Methodology and provenance: data/raw/CCHI_SOURCES.md.
 """
 
 from __future__ import annotations
@@ -53,6 +36,7 @@ import pathlib
 
 import pandas as pd
 
+import asb_loader
 import cache
 import cchi_loader
 import funding_loader
@@ -65,7 +49,7 @@ import workforce_loader
 # changed harm formula, different roll-up), so an existing on-disk cache is
 # rebuilt instead of served stale. Source-file changes invalidate the cache
 # automatically; this covers code changes that the files can't signal.
-_CACHE_VERSION = 3
+_CACHE_VERSION = 4
 
 # Committed deploy snapshot. A host that ships only this snapshot (not the
 # ~15 MB raw ODS files) reads it directly — see build_dataset. Regenerate with
@@ -74,6 +58,7 @@ _SNAPSHOT_DIR  = pathlib.Path(__file__).parent / "data" / "snapshot"
 _SNAPSHOT_FILE = _SNAPSHOT_DIR / "dataset.pkl"
 
 
+# The 13 data.police.uk categories the recorded-crime harm is built from.
 CRIME_TYPES = [
     "Violence and sexual offences",
     "Public order",
@@ -90,6 +75,12 @@ CRIME_TYPES = [
     "Other crime",
 ]
 
+# Anti-social behaviour is the forecast-derived floor category — not recorded
+# crime, so it sits outside CRIME_TYPES and is handled separately, but it is a
+# 14th axis on the crime-profile radar.
+ASB_CATEGORY = "Anti-social behaviour"
+DISPLAY_CATEGORIES = CRIME_TYPES + [ASB_CATEGORY]
+
 CRIME_TYPE_SHORT = {
     "Violence and sexual offences": "Violence/sexual",
     "Public order":                 "Public order",
@@ -104,11 +95,12 @@ CRIME_TYPE_SHORT = {
     "Possession of weapons":        "Weapons",
     "Bicycle theft":                "Bicycle theft",
     "Other crime":                  "Other",
+    "Anti-social behaviour":        "ASB (floor)",
 }
 
-# Each dashboard category's constituent PRC Offence Subgroups. The harm
-# pipeline operates at subgroup granularity; the dashboard rolls up to
-# the 13 categories above only for display (radar axes, hover labels).
+# Each dashboard category's constituent PRC Offence Subgroups. The PRC tables
+# publish counts at subgroup granularity; the dashboard rolls them up to the
+# 13 categories the CCHI weight file (and data.police.uk) use.
 SUBGROUPS_BY_CATEGORY: dict[str, list[str]] = {
     "Violence and sexual offences": [
         "Homicide", "Violence with injury", "Violence without injury",
@@ -129,37 +121,10 @@ SUBGROUPS_BY_CATEGORY: dict[str, list[str]] = {
     "Other crime":               ["Miscellaneous crimes against society"],
 }
 
-# Categories with more than one PRC subgroup — these are where the toggle
-# (national-mix vs per-force mix) actually changes anything.
-MULTI_SUBGROUP_CATEGORIES = [
-    cat for cat, sgs in SUBGROUPS_BY_CATEGORY.items() if len(sgs) > 1
-]
-
 # Forces excluded from the dashboard. Greater Manchester is absent from the
 # team's forecast and allocation model outputs (a known data.police.uk gap), so
 # it is dropped project-wide for consistency — the dashboard reports 42 forces.
 EXCLUDED_FORCES = {"Greater Manchester"}
-
-
-def _category_cchi_under_national_mix(
-    cchi_by_subgroup: dict[str, float],
-    national_volume_by_subgroup: dict[str, int],
-) -> dict[str, float]:
-    """For each dashboard category, the volume-weighted CCHI when the
-    subgroup mix is fixed at the national share. Used for the 'flat'
-    scenario, where forces no longer get credit/penalty for a mix that
-    differs from the country as a whole."""
-    out = {}
-    for cat, sgs in SUBGROUPS_BY_CATEGORY.items():
-        cat_total = sum(national_volume_by_subgroup[sg] for sg in sgs)
-        if cat_total == 0:
-            out[cat] = 0.0
-            continue
-        out[cat] = sum(
-            (national_volume_by_subgroup[sg] / cat_total) * cchi_by_subgroup[sg]
-            for sg in sgs
-        )
-    return out
 
 
 def _assemble_dataset() -> pd.DataFrame:
@@ -168,46 +133,36 @@ def _assemble_dataset() -> pd.DataFrame:
     through `build_dataset`, which caches the result to disk."""
     fte_by_force       = workforce_loader.load_force_fte()
     sg_counts_by_force = prc_loader.load_force_subgroup_counts()
-    cchi_by_subgroup   = cchi_loader.load_subgroup_cchi()
+    cchi_by_force_cat  = cchi_loader.load_force_category_cchi()
+    asb_by_force       = asb_loader.load_force_asb_counts()
     grant_by_force     = grant_loader.load_force_grant()
     funding_by_force   = funding_loader.load_force_funding()
 
-    fte_forces     = set(fte_by_force)
-    count_forces   = set(sg_counts_by_force.index)
-    grant_forces   = set(grant_by_force)
-    funding_forces = set(funding_by_force.index)
-    common = (fte_forces & count_forces & grant_forces & funding_forces) - EXCLUDED_FORCES
+    common = (
+        set(fte_by_force) & set(sg_counts_by_force.index) & set(grant_by_force)
+        & set(funding_by_force.index) & set(cchi_by_force_cat) & set(asb_by_force)
+    ) - EXCLUDED_FORCES
     if len(common) != 42:
         raise ValueError(
             f"Expected 42 PFAs (43 territorial minus {sorted(EXCLUDED_FORCES)}) in "
-            f"all four sources, got {len(common)}. FTE={len(fte_forces)}, "
-            f"counts={len(count_forces)}, grant={len(grant_forces)}, "
-            f"funding={len(funding_forces)}."
+            f"all sources, got {len(common)}. FTE={len(fte_by_force)}, "
+            f"counts={len(sg_counts_by_force.index)}, grant={len(grant_by_force)}, "
+            f"funding={len(funding_by_force.index)}, cchi={len(cchi_by_force_cat)}, "
+            f"asb={len(asb_by_force)}."
         )
 
+    # PRC subgroup columns must cover (only) the dashboard taxonomy, so the
+    # roll-up to the 13 categories below can't silently drop or mis-bucket.
     expected_subgroups = set()
     for sgs in SUBGROUPS_BY_CATEGORY.values():
         expected_subgroups.update(sgs)
     counts_subgroups = set(sg_counts_by_force.columns)
-    cchi_subgroups   = set(cchi_by_subgroup)
     if counts_subgroups != expected_subgroups:
-        missing = expected_subgroups - counts_subgroups
-        extra   = counts_subgroups - expected_subgroups
         raise ValueError(
             f"PRC subgroup count columns do not match the dashboard taxonomy. "
-            f"Missing from PRC: {missing}. Extra: {extra}."
+            f"Missing from PRC: {expected_subgroups - counts_subgroups}. "
+            f"Extra: {counts_subgroups - expected_subgroups}."
         )
-    if cchi_subgroups != expected_subgroups:
-        missing = expected_subgroups - cchi_subgroups
-        extra   = cchi_subgroups - expected_subgroups
-        raise ValueError(
-            f"CCHI lookup does not cover the dashboard taxonomy. "
-            f"Missing CCHI: {missing}. Extra: {extra}."
-        )
-
-    sg_counts_common = sg_counts_by_force.loc[sorted(common)]
-    national_volume = {sg: int(sg_counts_common[sg].sum()) for sg in expected_subgroups}
-    cchi_by_cat_natmix = _category_cchi_under_national_mix(cchi_by_subgroup, national_volume)
 
     rows = []
     for force in sorted(common):
@@ -215,27 +170,29 @@ def _assemble_dataset() -> pd.DataFrame:
         grant         = grant_by_force[force]
         total_funding = float(funding_by_force.loc[force, "total_funding_gbp"])
         precept       = float(funding_by_force.loc[force, "precept_gbp"])
-        sg_counts = {sg: int(sg_counts_by_force.loc[force, sg]) for sg in expected_subgroups}
+        weights       = cchi_by_force_cat[force]
+        asb_count     = asb_by_force[force]
 
-        # Per-force harm under the per-force-mix scenario: every offence
-        # weighted by its own subgroup's CCHI.
-        harm_sub = sum(sg_counts[sg] * cchi_by_subgroup[sg] for sg in expected_subgroups)
-
-        # Per-force harm under the national-mix scenario: each category
-        # carries one national-mix-weighted CCHI; force-specific subgroup
-        # mix has been levelled.
         category_counts = {
-            cat: sum(sg_counts[sg] for sg in sgs)
+            cat: int(sum(sg_counts_by_force.loc[force, sg] for sg in sgs))
             for cat, sgs in SUBGROUPS_BY_CATEGORY.items()
         }
-        harm_flat = sum(category_counts[cat] * cchi_by_cat_natmix[cat] for cat in CRIME_TYPES)
 
-        crime_total = sum(sg_counts.values())
-        crime_profile = (
-            {cat: category_counts[cat] / crime_total for cat in CRIME_TYPES}
-            if crime_total > 0
-            else {cat: 0.0 for cat in CRIME_TYPES}
-        )
+        # Harm = recorded crime weighted by the shared per-force CCHI, plus the
+        # ASB floor (forecast volume × CCHI 1). One scenario — the weighting the
+        # ILP consumed.
+        harm_recorded = sum(category_counts[cat] * weights[cat] for cat in CRIME_TYPES)
+        harm_asb      = asb_count * cchi_loader.ASB_FLOOR_CCHI
+        harm_total    = harm_recorded + harm_asb
+
+        # Crime mix for the radar, over the 14 display categories (recorded +
+        # the ASB floor). Shares of all logged demand including ASB.
+        demand_total = sum(category_counts.values()) + asb_count
+        if demand_total > 0:
+            crime_profile = {cat: category_counts[cat] / demand_total for cat in CRIME_TYPES}
+            crime_profile[ASB_CATEGORY] = asb_count / demand_total
+        else:
+            crime_profile = {cat: 0.0 for cat in DISPLAY_CATEGORIES}
 
         rows.append({
             "force":           force,
@@ -243,38 +200,34 @@ def _assemble_dataset() -> pd.DataFrame:
             "grant":           grant,
             "precept":         precept,
             "total_funding":   total_funding,
-            # Everything that is not the redistributable formula grant -
-            # precept plus ring-fenced specific grants - is held fixed when
+            # Everything that is not the redistributable formula grant —
+            # precept plus ring-fenced specific grants — is held fixed when
             # the model reallocates.
             "fixed_funding":   total_funding - grant,
-            "harm_total_flat": harm_flat,
-            "harm_total_sub":  harm_sub,
+            "harm_total":      harm_total,
+            "harm_recorded":   harm_recorded,
+            "harm_asb":        harm_asb,
+            "asb_count":       asb_count,
             "crime_profile":   crime_profile,
             "crime_counts":    category_counts,
-            "subgroup_counts": sg_counts,
         })
 
     df = pd.DataFrame(rows)
 
-    total_fte       = df["officer_fte"].sum()
-    total_funding   = df["total_funding"].sum()
-    total_harm_flat = df["harm_total_flat"].sum()
-    total_harm_sub  = df["harm_total_sub"].sum()
+    total_fte     = df["officer_fte"].sum()
+    total_funding = df["total_funding"].sum()
+    total_harm    = df["harm_total"].sum()
 
-    df["actual_share_pct"]    = df["officer_fte"]    / total_fte        * 100
-    df["funding_share_pct"]   = df["total_funding"]  / total_funding    * 100
-    df["harm_share_pct_flat"] = df["harm_total_flat"] / total_harm_flat * 100
-    df["harm_share_pct_sub"]  = df["harm_total_sub"]  / total_harm_sub  * 100
+    df["actual_share_pct"]  = df["officer_fte"]   / total_fte     * 100
+    df["funding_share_pct"] = df["total_funding"] / total_funding * 100
+    df["harm_share_pct"]    = df["harm_total"]    / total_harm    * 100
 
-    # Officer (headcount) allocation gap: officer share - harm share.
-    df["allocation_gap_flat"] = df["actual_share_pct"] - df["harm_share_pct_flat"]
-    df["allocation_gap_sub"]  = df["actual_share_pct"] - df["harm_share_pct_sub"]
-
-    # Funding allocation gap: total-funding share - harm share. Total funding
-    # is grant + precept + specific grants, so a force that is well funded
-    # locally (high precept) no longer looks under-resourced on grant alone.
-    df["allocation_gap_funding_flat"] = df["funding_share_pct"] - df["harm_share_pct_flat"]
-    df["allocation_gap_funding_sub"]  = df["funding_share_pct"] - df["harm_share_pct_sub"]
+    # Officer (headcount) allocation gap and funding allocation gap, both
+    # measured as resource share - harm share. Total funding is grant + precept
+    # + specific grants, so a force well funded locally (high precept) no longer
+    # looks under-resourced on grant alone.
+    df["allocation_gap"]         = df["actual_share_pct"]  - df["harm_share_pct"]
+    df["allocation_gap_funding"] = df["funding_share_pct"] - df["harm_share_pct"]
 
     return df
 
@@ -288,9 +241,8 @@ def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFr
     refresh:   ignore any existing cache and re-parse (then overwrite it).
     use_cache: set False to bypass the cache entirely (read and write).
 
-    The cache invalidates automatically when any of the five source files
-    (PRC, workforce, CCHI, grant, funding) changes or when `_CACHE_VERSION`
-    is bumped.
+    The cache invalidates automatically when any source file changes or when
+    `_CACHE_VERSION` is bumped.
 
     Deploy fallback: when the raw source files are absent (a host that ships
     only the committed snapshot), the snapshot at `data/snapshot/dataset.pkl`
@@ -304,6 +256,7 @@ def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFr
         prc_loader.SOURCE,
         workforce_loader.SOURCE,
         cchi_loader.SOURCE,
+        asb_loader.SOURCE,
         grant_loader.SOURCE,
         funding_loader.SOURCE,
     )
@@ -320,10 +273,13 @@ def build_dataset(*, refresh: bool = False, use_cache: bool = True) -> pd.DataFr
 
 
 def national_crime_profile(df: pd.DataFrame) -> dict[str, float]:
-    totals = {ct: 0 for ct in CRIME_TYPES}
+    """National crime mix over the 14 display categories (recorded + ASB
+    floor), the radar's grey baseline."""
+    totals = {ct: 0.0 for ct in DISPLAY_CATEGORIES}
     for counts in df["crime_counts"]:
         for ct, v in counts.items():
             totals[ct] += v
+    totals[ASB_CATEGORY] += float(df["asb_count"].sum())
     grand = sum(totals.values())
     return {ct: v / grand for ct, v in totals.items()}
 
