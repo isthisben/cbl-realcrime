@@ -16,8 +16,8 @@ version int. The cache entry is keyed by `name`; bumping the version or
 touching any source file invalidates it.
 
 Stored with pickle, so the assembled DataFrame (whose `crime_profile` /
-`crime_counts` / `subgroup_counts` columns hold plain dicts) round-trips
-exactly — parquet would need pyarrow and would not preserve the dict columns.
+`crime_counts` columns hold plain dicts) round-trips exactly — parquet would
+need pyarrow and would not preserve the dict columns.
 Reads and writes are best-effort: a corrupt file, a pandas-version-skewed
 pickle, or an unwritable directory degrades to a rebuild rather than raising,
 so a stale cache can never wedge the dashboard.

@@ -1,0 +1,43 @@
+force,pool,pool_name,current_fte,target_fte,allocated_fte,absolute_deviation,harm_weighted_demand,demand_pressure_index_pct,reallocation_pct
+Avon and Somerset,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2722,3025.503745143027,3025.0,0.50374514,18331845.36,99.98335004067222,11.131520940484938
+Bedfordshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1151,891.575829354247,891.0,0.57582935,5402151.71,99.93541442743417,-22.589052997393573
+Cambridgeshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),872,1088.6061759270633,1088.0,0.60617593,6595979.3,99.94431632481351,24.770642201834864
+Cheshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1445,1390.2603577107943,1390.0,0.26035771,8423733.71,99.98127273719989,-3.8062283737024223
+City of London,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),637,72.4387344766675,319.0,246.56127,438913.91,440.3721328162487,-49.92150706436421
+Cleveland,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),910,1188.6770269493586,1188.0,0.67702695,7202319.11,99.94304365828486,30.54945054945055
+Cumbria,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),600,612.110795374397,612.0,0.11079537,3708843.68,99.9818994575436,2.0
+Derbyshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1506,1519.9937571116304,1519.0,0.99375711,9209802.02,99.93462097413355,0.8632138114209826
+Devon and Cornwall,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1923,2665.7397137060457,2665.0,0.73971371,16151997.26,99.97225109029803,38.585543421736865
+Dorset,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1154,810.3220869561917,810.0,0.32208696,4909826.74,99.96025198357835,-29.809358752166375
+Durham,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),955,906.9786400835484,906.0,0.97864008,5495478.96,99.89209888300586,-5.130890052356021
+Dyfed-Powys,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),819,536.5013352730402,536.0,0.50133527,3250718.0100000002,99.90655470171662,-34.55433455433455
+Essex,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1977,2448.320792138075,2448.0,0.32079214,14834633.15,99.9868974629834,23.823975720789075
+Gloucestershire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),861,764.0610595431718,764.0,0.061059543,4629526.3100000005,99.99200855188087,-11.265969802555169
+Gwent,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),796,874.177469830756,874.0,0.17746983,5296733.22,99.9796986496586,9.798994974874372
+Hampshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2199,2923.6107455187985,2923.0,0.61074552,17714464.96,99.97910988938132,32.92405638926785
+Hertfordshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1468,1336.085676595192,1336.0,0.085676595,8095483.619999999,99.99358749242711,-8.991825613079019
+Humberside,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1247,1442.708260742806,1442.0,0.70826074,8741521.07,99.95090755615128,15.637530072173217
+Kent,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2146,2171.501467313498,2171.0,0.50146731,13157355.75,99.97690688580937,1.1649580615097856
+Lancashire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2052,2357.177384781685,2357.0,0.17738478,14282385.66,99.99247469525076,14.8635477582846
+Leicestershire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1474,1607.8394497947152,1607.0,0.8394498,9742068.31,99.94779019790674,9.023066485753054
+Lincolnshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),938,1010.5997166630311,1010.0,0.59971666,6123329.96,99.94065734898369,7.675906183368871
+Merseyside,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2301,1767.565088171396,1767.0,0.56508817,10709862.75,99.96803013506108,-23.20730117340287
+Metropolitan Police,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),11761,10742.157171599656,10742.0,0.1571716,65087859.97,99.99853687115963,-8.664229232208145
+Norfolk,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1253,1173.9185044269116,1173.0,0.91850443,7112895.67,99.92175739427842,-6.384676775738228
+North Wales,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1163,818.6668818801483,818.0,0.66688188,4960388.73,99.91854050836689,-29.664660361135
+North Yorkshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1162,867.0866521520844,867.0,0.086652152,5253769.21,99.99000651758745,-25.38726333907057
+Northamptonshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1088,1093.7294555483554,1093.0,0.72945555,6627021.79,99.93330566854033,0.4595588235294118
+Northumbria,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2015,2411.4976666050493,2411.0,0.4976666,14611517.959999999,99.97936275817551,19.65260545905707
+Nottinghamshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1474,1779.5667828202122,1779.0,0.56678282,10782582.28,99.96815051698627,20.69199457259159
+South Wales,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2335,1654.9726059889115,1654.0,0.97260599,10027653.06,99.94123129377539,-29.164882226980726
+South Yorkshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2152,2287.499805550314,2287.0,0.49980555,13860201.879999999,99.97815057517815,6.273234200743493
+Staffordshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1456,1548.518079660524,1548.0,0.51807966,9382633.89,99.96654351877908,6.318681318681318
+Suffolk,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),905,919.7273394267787,919.0,0.72733943,5572724.67,99.92091792908624,1.5469613259668509
+Surrey,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1699,1103.5706810107333,1103.0,0.57068101,6686650.809999999,99.94828776982271,-35.07945850500294
+Sussex,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),2244,2280.920558461209,2280.0,0.92055846,13820337.53,99.95964092402104,1.6042780748663104
+Thames Valley,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),3613,2865.7225556592107,2865.0,0.72255566,17363714.33,99.97478626610996,-20.703016883476337
+Warwickshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),838,756.7180330054148,756.0,0.71803301,4585034.140000001,99.90511221166977,-9.785202863961814
+West Mercia,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1517,1579.1390385377592,1579.0,0.13903854,9568169.5,99.99119529475455,4.0870138431114045
+West Midlands,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),3856,5083.929908153982,5083.0,0.92990815,30804065.950000003,99.9817088714679,31.820539419087133
+West Yorkshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),3908,4420.606689211914,4420.0,0.60668921,26784920.81,99.98627588350271,13.101330603889458
+Wiltshire,Pool_2_Investigators,Police Staff and Designated Officers (Investigators),1038,829.696281141702,605.0,224.69628,5027217.02,72.91824897268322,-41.714836223506744

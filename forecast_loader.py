@@ -1,27 +1,24 @@
 """
-12-month-ahead crime forecast per force x crime type — the contract the
-SARIMAX model output will fill, with seeded synthetic data until it lands.
+12-month crime forecast per force x crime type — the model team's LightGBM
+output, served long-format, with seeded synthetic data only as a fallback if
+the file is absent.
 
     load_forecast(forces)  ->  long DataFrame, columns:
         force, crime_type, month, y_pred
-        (plus y_true, abs_err, sq_err when the real file carries them)
-    IS_MOCKUP              ->  True while synthetic placeholder data is in use.
+    IS_MOCKUP              ->  True only if the real file is missing.
 
-Real swap
----------
-Drop the model output at `data/raw/forecast_sarimax.csv` or `.parquet` with
-at least `force, crime_type, month, y_pred`. Optional validation columns
-`y_true, abs_err, sq_err` are carried through when present. `crime_type`
-values must be the 13 dashboard categories (`data.CRIME_TYPES`); `force`
-the canonical 43; `month` a period the dashboard can parse (this mockup
-emits "YYYY-MM" strings — a real datetime column is fine too).
+Real source: data/raw/forecast_lgbm.csv (force, crime_type, month, y_pred),
+built from the team's `forecast_2026_03_to_2027_02.csv` by
+.claude/ingest_model_outputs.py — long force names normalised to the canonical
+42, covering the 13 recorded categories plus anti-social behaviour over the
+forecast window March 2026 – February 2027. This is the *predict* layer of the
+project's diagnose / predict / optimise story; the ILP allocation
+(allocation_loader) was optimised against this exact forecast — its harm
+reproduces the ILP's to a share correlation of 1.0000.
 
 The mockup is decoupled from the recorded-crime counts on purpose, so this
 module imports cheaply (only the `data.CRIME_TYPES` constant) and plays no
-part in the startup ODS parse. Magnitudes are plausible but synthetic; the
-point of the stub is the schema and shape, which is why every surfaced value
-must stay behind an IS_MOCKUP badge. Anchor the base levels to real PRC
-volumes later if a more convincing placeholder is wanted.
+part in the startup ODS parse.
 """
 
 from __future__ import annotations
@@ -37,17 +34,17 @@ import data
 
 
 _RAW = pathlib.Path(__file__).parent / "data" / "raw"
-SOURCE_PARQUET = _RAW / "forecast_sarimax.parquet"
-SOURCE_CSV     = _RAW / "forecast_sarimax.csv"
+SOURCE_CSV     = _RAW / "forecast_lgbm.csv"
+SOURCE_PARQUET = _RAW / "forecast_lgbm.parquet"
 
 REQUIRED_COLUMNS = ["force", "crime_type", "month", "y_pred"]
 OPTIONAL_COLUMNS = ["y_true", "abs_err", "sq_err"]
 
 N_MONTHS = 12
 
-# Rough relative monthly magnitude per category, so the synthetic series are
-# not all the same size (violence dwarfs homicide, etc.). Synthetic — not a
-# claim about real volumes.
+MODEL_NAME = "LightGBM"
+
+# Rough relative monthly magnitude per category for the fallback mockup only.
 _CATEGORY_SCALE = {
     "Violence and sexual offences": 18000,
     "Public order":                  3600,
@@ -67,37 +64,6 @@ _CATEGORY_SCALE = {
 IS_MOCKUP: bool = not (SOURCE_PARQUET.exists() or SOURCE_CSV.exists())
 
 
-def _seeded_rng(key: str) -> random.Random:
-    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
-    return random.Random(int(digest, 16) % (2**32))
-
-
-def _forecast_months() -> list[str]:
-    """The next N_MONTHS calendar months as 'YYYY-MM', starting next month
-    (a forecast is always forward-looking, so this tracks the clock)."""
-    start = (pd.Timestamp.today().to_period("M") + 1)
-    return [str(start + i) for i in range(N_MONTHS)]
-
-
-def _mockup(forces: list[str]) -> pd.DataFrame:
-    months = _forecast_months()
-    rows = []
-    for force in forces:
-        for ct in data.CRIME_TYPES:
-            rng   = _seeded_rng(f"{force}|{ct}")
-            base  = _CATEGORY_SCALE[ct] * rng.uniform(0.4, 1.6)
-            trend = rng.uniform(-0.04, 0.06)        # monthly drift
-            amp   = rng.uniform(0.05, 0.20)         # seasonal amplitude
-            phase = rng.uniform(0.0, 2 * math.pi)
-            for i, month in enumerate(months):
-                seasonal = 1.0 + amp * math.sin(2 * math.pi * i / 12 + phase)
-                noise    = 1.0 + rng.gauss(0.0, 0.03)
-                y = base * ((1.0 + trend) ** i) * seasonal * noise
-                rows.append((force, ct, month, max(0, round(y))))
-
-    return pd.DataFrame(rows, columns=REQUIRED_COLUMNS)
-
-
 def _read_real() -> pd.DataFrame:
     path = SOURCE_PARQUET if SOURCE_PARQUET.exists() else SOURCE_CSV
     df = (pd.read_parquet(path) if path.suffix == ".parquet"
@@ -115,9 +81,8 @@ def _read_real() -> pd.DataFrame:
 
 
 def load_forecast(forces: list[str] | None = None) -> pd.DataFrame:
-    """Long-format 12-month forecast. Reads the model output if present, else
-    returns seeded synthetic placeholder data for `forces` (defaults to the
-    canonical 43 via `data` if not supplied)."""
+    """Long-format 12-month forecast. Reads the LightGBM output if present,
+    else returns seeded synthetic placeholder data for `forces`."""
     global IS_MOCKUP
     if SOURCE_PARQUET.exists() or SOURCE_CSV.exists():
         IS_MOCKUP = False
@@ -128,8 +93,33 @@ def load_forecast(forces: list[str] | None = None) -> pd.DataFrame:
     return _mockup(force_list)
 
 
+def _seeded_rng(key: str) -> random.Random:
+    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
+    return random.Random(int(digest, 16) % (2**32))
+
+
+def _forecast_months() -> list[str]:
+    start = (pd.Timestamp.today().to_period("M") + 1)
+    return [str(start + i) for i in range(N_MONTHS)]
+
+
+def _mockup(forces: list[str]) -> pd.DataFrame:
+    months = _forecast_months()
+    rows = []
+    for force in forces:
+        for ct in data.CRIME_TYPES:
+            rng   = _seeded_rng(f"{force}|{ct}")
+            base  = _CATEGORY_SCALE[ct] * rng.uniform(0.4, 1.6)
+            trend = rng.uniform(-0.04, 0.06)
+            amp   = rng.uniform(0.05, 0.20)
+            phase = rng.uniform(0.0, 2 * math.pi)
+            for i, month in enumerate(months):
+                seasonal = 1.0 + amp * math.sin(2 * math.pi * i / 12 + phase)
+                noise    = 1.0 + rng.gauss(0.0, 0.03)
+                y = base * ((1.0 + trend) ** i) * seasonal * noise
+                rows.append((force, ct, month, max(0, round(y))))
+    return pd.DataFrame(rows, columns=REQUIRED_COLUMNS)
+
+
 def _default_forces() -> list[str]:
-    """Canonical force list, derived from the live dataset only if no explicit
-    list is given. Slow (triggers the ODS parse), so callers should pass
-    `DF["force"]`."""
     return sorted(data.build_dataset()["force"])
