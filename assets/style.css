@@ -336,6 +336,13 @@ html, body {
     margin-bottom: 18px;
 }
 
+.hotspots-summary {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f3a5f;
+}
+
 .baseline-badge {
     background: #e7eef6;
     color: #1f3a5f;

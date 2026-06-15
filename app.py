@@ -516,16 +516,13 @@ def build_hotspots(force_name: str) -> go.Figure:
     smax = searches.max()
     sizes = 12.0 + 28.0 * (searches / smax)
 
-    custom = list(zip(rows["rank"], rows["searches"], rows["linked_finds"],
-                      (rows["find_rate"] * 100).round(1)))
+    # A few forces (e.g. the Met) report searches but no linked outcomes in the
+    # extract, so a find rate would be misleading (it would read as a real 0%).
+    # Colour those neutrally and drop the find rate from the colour + hover.
+    has_finds = rows["linked_finds"].sum() > 0
 
-    fig = go.Figure(go.Scattermap(
-        lat=rows["lat"], lon=rows["lon"],
-        mode="markers+text",
-        text=rows["rank"].astype(str),
-        textfont=dict(size=10, color="#ffffff"),
-        textposition="middle center",
-        marker=dict(
+    if has_finds:
+        marker = dict(
             size=sizes,
             color=rows["find_rate"],
             cmin=0.0, cmax=1.0,
@@ -536,15 +533,35 @@ def build_hotspots(force_name: str) -> go.Figure:
                 tickformat=".0%",
             ),
             opacity=0.9,
-        ),
-        customdata=custom,
-        hovertemplate=(
+        )
+        custom = list(zip(rows["rank"], rows["searches"], rows["linked_finds"],
+                          (rows["find_rate"] * 100).round(1)))
+        hovertemplate = (
             "<b>Hotspot #%{customdata[0]}</b><br>"
             "Searches: %{customdata[1]:,}<br>"
             "Linked finds: %{customdata[2]:,}<br>"
             "Find rate: %{customdata[3]}%"
             "<extra></extra>"
-        ),
+        )
+    else:
+        marker = dict(size=sizes, color="#8d99ae", opacity=0.9)
+        custom = list(zip(rows["rank"], rows["searches"]))
+        hovertemplate = (
+            "<b>Hotspot #%{customdata[0]}</b><br>"
+            "Searches: %{customdata[1]:,}<br>"
+            "Find data not available for this force"
+            "<extra></extra>"
+        )
+
+    fig = go.Figure(go.Scattermap(
+        lat=rows["lat"], lon=rows["lon"],
+        mode="markers+text",
+        text=rows["rank"].astype(str),
+        textfont=dict(size=10, color="#ffffff"),
+        textposition="middle center",
+        marker=marker,
+        customdata=custom,
+        hovertemplate=hovertemplate,
     ))
     fig.update_layout(
         map=dict(
@@ -552,11 +569,30 @@ def build_hotspots(force_name: str) -> go.Figure:
             center=dict(lat=rows["lat"].mean(), lon=rows["lon"].mean()),
             zoom=_hotspot_zoom(rows["lat"], rows["lon"]),
         ),
+        # Key the UI state to the force so the map jumps to the newly selected
+        # force; a manual zoom/pan is kept only while the force is unchanged.
+        # Without this the map stays parked on the previously viewed force.
+        uirevision=force_name,
         margin=dict(l=0, r=0, t=0, b=0),
         height=460,
         paper_bgcolor="rgba(0,0,0,0)",
     )
     return fig
+
+
+def hotspots_summary(force_name: str) -> str:
+    """One-line headline for the hotspots panel: total searches across the
+    force's five hotspots, and the combined find rate where outcomes exist."""
+    rows = HOTSPOTS_DF[HOTSPOTS_DF["force"] == force_name]
+    if rows.empty:
+        return ""                       # no-data force; the map carries its note
+    searches = int(rows["searches"].sum())
+    finds = int(rows["linked_finds"].sum())
+    if finds == 0:
+        return (f"Across these five locations: {searches:,} stop-and-searches "
+                "(find/outcome data not reported for this force).")
+    return (f"Across these five locations: {searches:,} stop-and-searches, "
+            f"{finds:,} finds — {finds / searches:.0%} found something.")
 
 
 # ---------------------------------------------------------------------------
@@ -950,16 +986,22 @@ app.layout = html.Div([
         html.Div([
             html.Div([html.H2(id="hotspots-title")], className="panel-header"),
             html.P(
-                "The five locations with the most stop-and-searches in the "
-                "selected force (data.police.uk, 2023–2026). Point size is the "
-                "number of searches; colour is the find rate — the share of "
-                "those searches that led to a linked outcome. Stop-and-search "
-                "data is published for 39 of the 42 forces.",
+                "Where this force concentrates stop-and-search, and how often "
+                "it pays off — its five busiest search locations (data.police.uk, "
+                "2023–2026). Bigger points mean more searches; colour is the "
+                "find rate (dark = searches there rarely find anything, bright = "
+                "they usually do), so a large dark point is a lot of searching "
+                "for little result. This is where search effort goes and how "
+                "effective it is — not where crime is highest, which the map and "
+                "forecast above answer. Recorded for 39 of the 42 forces; drag "
+                "to pan, use the controls to zoom.",
                 className="panel-caption",
             ),
+            html.P(id="hotspots-summary", className="hotspots-summary"),
             dcc.Graph(
                 id="hotspots-graph",
-                config={"displayModeBar": False, "scrollZoom": False},
+                config={"scrollZoom": True, "displayModeBar": True,
+                        "displaylogo": False},
             ),
         ], className="panel panel-hotspots"),
     ], className="hotspots-row"),
@@ -1171,11 +1213,12 @@ def update_forecast(force_name: str):
 @app.callback(
     Output("hotspots-graph", "figure"),
     Output("hotspots-title", "children"),
+    Output("hotspots-summary", "children"),
     Input("force-dropdown", "value"),
 )
 def update_hotspots(force_name: str):
     title = f"Stop-and-search hotspots — {force_name}"
-    return build_hotspots(force_name), title
+    return build_hotspots(force_name), title, hotspots_summary(force_name)
 
 
 # ---------------------------------------------------------------------------
