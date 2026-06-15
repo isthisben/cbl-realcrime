@@ -216,3 +216,14 @@ panels.
 - `grant_redistribution_result.csv` — formula-grant redistribution toward harm
   share (41 forces; City of London, a fraud specialist, sits outside the grant
   model).
+
+### data/raw/hotspots.csv
+
+Top-five stop-and-search hotspots per force, extracted from the data.police.uk
+stop-and-search records (2023–2026): for each force, the five locations with the
+most recorded searches. Columns `force, rank, Latitude, Longitude, searches,
+linked_finds, find_rate`, where `find_rate = linked_finds / searches` is the
+share of searches at that location that led to a linked outcome. Stop-and-search
+data is published for 39 of the 42 forces, so Gwent, South Yorkshire and
+Warwickshire are absent. Force names are data.police.uk slugs, normalised to the
+canonical names in `hotspots_loader.py`. Read by `hotspots_loader.py`.

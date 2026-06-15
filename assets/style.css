@@ -332,6 +332,10 @@ html, body {
     margin-bottom: 18px;
 }
 
+.hotspots-row {
+    margin-bottom: 18px;
+}
+
 .baseline-badge {
     background: #e7eef6;
     color: #1f3a5f;

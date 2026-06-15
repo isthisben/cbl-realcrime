@@ -2,7 +2,6 @@
 # committed snapshot (data/snapshot/) + the committed geojson, so the raw ODS,
 # the local cache, and the dev scaffolding are all excluded.
 .git
-.claude
 __pycache__/
 *.pyc
 data/cache/

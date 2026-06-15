@@ -43,9 +43,12 @@ The project runs in three layers, all sharing one harm weighting:
   (patrol / investigators / PCSOs, or all three combined) on the officer basis.
 - **Crime forecast** — the LightGBM 12-month prediction (Mar 2026 – Feb 2027)
   of total offences for the selected force.
+- **Stop-and-search hotspots** — the five locations with the most
+  stop-and-searches in the selected force (data.police.uk, 2023–2026), plotted
+  on a street map with the find rate at each. Published for 39 of the 42 forces.
 
-The map, radar and forecast all respond to the selected force; the basis and
-workforce-pool toggles drive the map and the reallocation panel.
+The map, radar, forecast and hotspots all respond to the selected force; the
+basis and workforce-pool toggles drive the map and the reallocation panel.
 
 ## Scope: 42 forces
 
@@ -136,6 +139,7 @@ licensing.
 | `forecast_lgbm.csv` | model team's LightGBM forecast | forecast panel + ASB volumes |
 | `asb_counts.csv` | summed from the forecast | ASB floor term |
 | `ilp/*.csv` | model team's ILP optimiser | reallocation panel |
+| `hotspots.csv` | data.police.uk stop-and-search (2023–2026) | hotspots panel (39 forces) |
 
 The raw Home Office ODS files (~20 MB) are committed so the pipeline reproduces
 from source. They are excluded from the Docker image (`.dockerignore`) — the
@@ -196,6 +200,7 @@ cchi_loader.py         Per-force CCHI weights + the ASB floor constant
 asb_loader.py          Forecast-derived ASB volumes per force
 forecast_loader.py     LightGBM 12-month forecast (long format)
 allocation_loader.py   Reads the ILP outputs (grant + workforce pools)
+hotspots_loader.py     Top-5 stop-and-search hotspots per force
 
 assets/style.css       Styling
 data/raw/SOURCES.md    Provenance + download links for every source
@@ -225,8 +230,9 @@ screenshot for the report or slides.
 
 ## Known gaps and next steps
 
-- **Crime hotspots** — five hotspots per force are planned as a later addition;
-  they are not in the dashboard yet.
+- **Stop-and-search hotspots** are shown for 39 of the 42 forces. The three
+  without published stop-and-search data (Gwent, South Yorkshire, Warwickshire)
+  show a "no data" note in the panel.
 - **Resolution rate** — the full Sherman formula multiplies harm by
   `(1 − clearance rate)`. The Home Office outcomes table only publishes per-force
   clearance for fraud, so the dashboard uses `count × weight` and treats clearance

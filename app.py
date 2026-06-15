@@ -9,6 +9,7 @@ Panels:
   3. Officer function mix: selected force vs national, across the CIPFA POA functions
   4. Reallocation: the ILP-recommended change in formula grant (£) or workforce FTE
   5. Crime forecast: the 12-month LightGBM prediction for the selected force
+  6. Stop-and-search hotspots: the selected force's five busiest search locations
 
 Controls: funding-vs-officers basis toggle, workforce-pool selector, force dropdown.
 
@@ -17,6 +18,8 @@ Then open: http://127.0.0.1:8050
 """
 
 from __future__ import annotations
+
+import math
 
 import dash
 from dash import Input, Output, State, dcc, html, no_update
@@ -27,6 +30,7 @@ import data
 import forecast_loader
 import functions_loader
 import geo
+import hotspots_loader
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +49,8 @@ ALLOCATION_FTE = {
 }
 POOL_SUMMARY      = allocation_loader.pool_summary()
 FORECAST_DF       = forecast_loader.load_forecast()
+HOTSPOTS_DF       = hotspots_loader.load_hotspots()
+HOTSPOT_FORCES    = set(HOTSPOTS_DF["force"])
 
 DEFAULT_FORCE = "Metropolitan Police"
 DEFAULT_BASIS = "budget"
@@ -469,6 +475,90 @@ def build_forecast(force_name: str) -> go.Figure:
     return fig
 
 
+def _hotspot_zoom(lats, lons) -> float:
+    """A rough map zoom that keeps a force's five points comfortably in view —
+    tight for a clustered city force, wider for a spread-out rural one."""
+    span = max(float(lats.max() - lats.min()),
+               float(lons.max() - lons.min()), 0.02)
+    return min(12.5, max(7.5, math.log2(150.0 / span)))
+
+
+def build_hotspots(force_name: str) -> go.Figure:
+    """
+    The selected force's five stop-and-search hotspots on a street map — the
+    locations with the most searches (data.police.uk, 2023-2026). Point size is
+    the number of searches, colour is the find rate (share of searches with a
+    linked outcome). The three forces with no published stop-and-search data
+    get a short note instead of a map.
+    """
+    rows = HOTSPOTS_DF[HOTSPOTS_DF["force"] == force_name]
+    if rows.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No stop-and-search data is published for this force.",
+            x=0.5, y=0.5, xref="paper", yref="paper",
+            showarrow=False, font=dict(size=13, color="#777"),
+        )
+        fig.update_layout(
+            height=460,
+            margin=dict(l=10, r=10, t=10, b=10),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="#fafafa",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+        )
+        return fig
+
+    rows = rows.sort_values("rank")
+    searches = rows["searches"].to_numpy()
+    # Size each marker against the busiest of the force's own five hotspots
+    # (12-40 px), so relative search volume reads at a glance.
+    smax = searches.max()
+    sizes = 12.0 + 28.0 * (searches / smax)
+
+    custom = list(zip(rows["rank"], rows["searches"], rows["linked_finds"],
+                      (rows["find_rate"] * 100).round(1)))
+
+    fig = go.Figure(go.Scattermap(
+        lat=rows["lat"], lon=rows["lon"],
+        mode="markers+text",
+        text=rows["rank"].astype(str),
+        textfont=dict(size=10, color="#ffffff"),
+        textposition="middle center",
+        marker=dict(
+            size=sizes,
+            color=rows["find_rate"],
+            cmin=0.0, cmax=1.0,
+            colorscale="Viridis",
+            colorbar=dict(
+                title=dict(text="Find rate", side="top"),
+                thickness=14, len=0.7, x=0.99,
+                tickformat=".0%",
+            ),
+            opacity=0.9,
+        ),
+        customdata=custom,
+        hovertemplate=(
+            "<b>Hotspot #%{customdata[0]}</b><br>"
+            "Searches: %{customdata[1]:,}<br>"
+            "Linked finds: %{customdata[2]:,}<br>"
+            "Find rate: %{customdata[3]}%"
+            "<extra></extra>"
+        ),
+    ))
+    fig.update_layout(
+        map=dict(
+            style="carto-positron",
+            center=dict(lat=rows["lat"].mean(), lon=rows["lon"].mean()),
+            zoom=_hotspot_zoom(rows["lat"], rows["lon"]),
+        ),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=460,
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
@@ -856,6 +946,24 @@ app.layout = html.Div([
         ], className="panel panel-forecast"),
     ], className="forecast-row"),
 
+    html.Section([
+        html.Div([
+            html.Div([html.H2(id="hotspots-title")], className="panel-header"),
+            html.P(
+                "The five locations with the most stop-and-searches in the "
+                "selected force (data.police.uk, 2023–2026). Point size is the "
+                "number of searches; colour is the find rate — the share of "
+                "those searches that led to a linked outcome. Stop-and-search "
+                "data is published for 39 of the 42 forces.",
+                className="panel-caption",
+            ),
+            dcc.Graph(
+                id="hotspots-graph",
+                config={"displayModeBar": False, "scrollZoom": False},
+            ),
+        ], className="panel panel-hotspots"),
+    ], className="hotspots-row"),
+
     html.Footer([
         html.P([
             "Crime counts: Home Office Police Recorded Crime, Police Force ",
@@ -879,7 +987,9 @@ app.layout = html.Div([
             "Office outcomes table only publishes per-force breakdowns for "
             "fraud, so the resolution-rate term is dropped here. Forecast: "
             "model team's LightGBM, 12-month horizon. Allocation: model team's "
-            "ILP optimiser (workforce pools + formula grant).",
+            "ILP optimiser (workforce pools + formula grant). Stop-and-search "
+            "hotspots: data.police.uk, 2023–2026 — the five locations per force "
+            "with the most searches (39 of 42 forces).",
         ]),
         html.P([
             "Boundaries: ONS Open Geography Portal — ",
@@ -1056,6 +1166,16 @@ def update_functions(force_name: str):
 def update_forecast(force_name: str):
     title = f"Crime forecast — {force_name}"
     return build_forecast(force_name), title
+
+
+@app.callback(
+    Output("hotspots-graph", "figure"),
+    Output("hotspots-title", "children"),
+    Input("force-dropdown", "value"),
+)
+def update_hotspots(force_name: str):
+    title = f"Stop-and-search hotspots — {force_name}"
+    return build_hotspots(force_name), title
 
 
 # ---------------------------------------------------------------------------
