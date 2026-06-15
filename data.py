@@ -1,57 +1,33 @@
 """
-Police resource allocation dataset.
+Builds the per-force allocation dataset.
 
-Builds a per-force DataFrame with officer FTE, recorded crime counts across
-13 data.police.uk categories, and a harm total under the project's shared
-Cambridge Crime Harm Index (CCHI) weighting.
+Per force: officer FTE, recorded crime across the 13 categories, the funding
+figures, and a harm total = Σ (category count × per-force CCHI) + an ASB floor
+term. The CCHI weights come from `cchi_loader` (nine national-value categories,
+four per-force composites) and are the same weights the model team's ILP used,
+so the map and the optimiser rest on one source.
 
-Harm weighting (one scenario, shared with the model team's ILP)
----------------------------------------------------------------
-Per force, harm = Σ (category count × per-force CCHI) over the 13 recorded
-categories, plus an anti-social-behaviour floor term. The CCHI value per
-force and category comes from `cchi_loader`: nine categories carry one
-national value; four composite categories (violence and sexual, burglary,
-criminal damage and arson, drugs) carry a per-force value that is the
-volume-weighted average of their offence subgroups under that force's own mix.
-This is the exact weighting the team's ILP allocation consumed, so the harm
-picture here and the optimiser outputs (allocation_loader) rest on one source.
+ASB has no CCHI score and isn't in the recorded-crime tables, so it sits at the
+harm floor (CCHI = 1) on forecast-derived volumes — a 14th radar axis and a
+small additive harm term, always flagged as forecast-derived.
 
-Anti-social behaviour is logged as incidents, not recorded crime, so it has no
-CCHI score and is absent from the recorded-crime tables. The single
-highest-volume category a force handles, it is represented at the harm floor
-(CCHI = 1, `cchi_loader.ASB_FLOOR_CCHI`) using forecast-derived volumes
-(`asb_loader`). It is a 14th axis on the crime-profile radar and a small
-additive term in harm; every surface that shows it notes the forecast lineage.
+Two allocation gaps are produced, both `resource share − harm share`: officer
+headcount, and total funding (the headline). Only the formula grant is
+redistributable; precept and specific grants are held fixed. Harm here is
+*recorded* crime (2024/25) — today's picture; the ILP was optimised against the
+*forecast* under the same weights (diagnose / predict / optimise). Resolution
+rate is dropped from the formula because the Home Office only publishes
+per-force clearance for fraud.
 
 Inputs:
-    - data/raw/prc-pfa-mar2013-onwards-tables-230426.ods  (PRC counts)
-    - data/raw/open-data-table-police-workforce-280126.ods (officer FTE)
-    - data/cchi_weights_by_force_category.csv (per-force CCHI weights)
-    - data/raw/asb_counts.csv (forecast-derived ASB volumes)
-    - data/raw/police-grant-2025-26.csv (redistributable formula grant)
-    - data/raw/police-funding-england-and-wales-2015-to-2026-tables.ods
-      (total funding + precept per force, Table 4a)
-
-Resource side:
-    Each force carries an officer FTE, a redistributable formula grant, a
-    council-tax precept, and a total funding figure (grant + precept +
-    ring-fenced specific grants). Two allocation gaps are produced — officer
-    share - harm share, and total-funding share - harm share. The funding gap
-    is the headline; the optimiser (allocation_loader) moves only the formula
-    grant, holding precept and specific grants fixed.
-
-Actual vs forecast. The harm here is built on *recorded* crime (PRC 2024/25),
-so the map answers "is today's resourcing aligned with the harm forces face
-now". The ILP allocation was optimised against *forecast* harm (predicted next
-12 months) under the same weights — the diagnose / predict / optimise split is
-deliberate; both use the one CCHI file.
+    data/raw/prc-pfa-mar2013-onwards-tables-230426.ods    PRC crime counts
+    data/raw/open-data-table-police-workforce-280126.ods  officer FTE
+    data/cchi_weights_by_force_category.csv               per-force CCHI weights
+    data/raw/asb_counts.csv                               forecast-derived ASB
+    data/raw/police-grant-2025-26.csv                     formula grant
+    data/raw/police-funding-...-2026-tables.ods           total funding + precept
 
 Methodology and provenance: data/raw/CCHI_SOURCES.md.
-
-Resolution rate is not in the harm formula: outcomes-mar25 only publishes
-per-force breakdowns for fraud, so harm is count * weight rather than
-count * weight * (1 - resolution_rate). Adding it back is one constant-
-multiplier line once per-force outcome data lands.
 """
 
 from __future__ import annotations

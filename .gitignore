@@ -31,8 +31,9 @@ data/*.geojson
 # demand via `python data.py`, or automatically whenever a source changes)
 data/cache/
 
-# Raw Home Office data files — ~15MB; retrieve per data/raw/SOURCES.md
-data/raw/*.ods
+# Raw Home Office ODS files are committed (see data/raw/SOURCES.md) so the
+# dataset reproduces from source. They are kept out of the Docker image via
+# .dockerignore — the deploy runs off the committed snapshot in data/snapshot/.
 
 # Generated shareable assets (regenerate via `python build_assets.py`)
 exports/

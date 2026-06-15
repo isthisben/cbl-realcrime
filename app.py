@@ -2,14 +2,15 @@
 Police Resource Allocation Dashboard
 TU/e 4CBLW020 — Real-World Crime project
 
-Components:
-  1. Choropleth map of allocation gap (resource share - harm share) per force
-  2. Radar chart: crime profile of selected force vs national average
-  3. Toggle: single CCHI per category vs subgroup-weighted per force
-  4. Toggle: funding basis (total funding £) vs officer basis (FTE)
-  5. Officer function mix: selected force vs national across CIPFA POA functions
-  6. Reallocation: recommended change in core grant £ (so total funding
-     tracks harm) or officer FTE
+Panels:
+  1. Choropleth map of the allocation gap (resource share − harm share) per force
+  2. Radar: the selected force's crime profile vs the national average
+     (14 categories, including the anti-social-behaviour floor)
+  3. Officer function mix: selected force vs national, across the CIPFA POA functions
+  4. Reallocation: the ILP-recommended change in formula grant (£) or workforce FTE
+  5. Crime forecast: the 12-month LightGBM prediction for the selected force
+
+Controls: funding-vs-officers basis toggle, workforce-pool selector, force dropdown.
 
 Run with:  python app.py
 Then open: http://127.0.0.1:8050
@@ -43,7 +44,7 @@ ALLOCATION_FTE = {
     for pool in allocation_loader.POOL_KEYS + ["all"]
 }
 POOL_SUMMARY      = allocation_loader.pool_summary()
-FORECAST_DF       = forecast_loader.load_forecast(DF["force"])
+FORECAST_DF       = forecast_loader.load_forecast()
 
 DEFAULT_FORCE = "Metropolitan Police"
 DEFAULT_BASIS = "budget"
@@ -431,10 +432,7 @@ def build_forecast(force_name: str) -> go.Figure:
     """
     12-month crime forecast (Mar 2026 – Feb 2027) for the selected force: total
     predicted offences per month, summed across the 14 categories (13 + ASB).
-
-    Reads forecast_loader, which serves the model team's LightGBM output from
-    data/raw/forecast_lgbm.csv (seeded synthetic data only as a fallback if
-    that file is absent, behind an IS_MOCKUP badge).
+    Reads the model team's LightGBM output from data/raw/forecast_lgbm.csv.
     """
     rows   = FORECAST_DF[FORECAST_DF["force"] == force_name]
     months = sorted(rows["month"].unique())
@@ -605,7 +603,7 @@ app.layout = html.Div([
                     "lowest notifiable offence (shoplifting). ASB volumes are "
                     "forecast-derived (data.police.uk lineage), so it shows as a "
                     "labelled 14th radar axis and a small additive harm term "
-                    "(~0.2% of national harm) — never folded silently into the "
+                    "(~0.17% of national harm) — never folded silently into the "
                     "recorded figures."
                 ]),
                 html.P([
@@ -813,27 +811,12 @@ app.layout = html.Div([
 
     html.Section([
         html.Div([
-            html.Div(
-                [html.H2(id="functions-title")]
-                + ([html.Span(
-                        "placeholder data",
-                        className="mockup-badge",
-                        title="Synthetic per-force mix — the real workforce-"
-                              "functions table is not yet in data/raw/.",
-                    )] if functions_loader.IS_MOCKUP else []),
-                className="panel-header",
-            ),
+            html.Div([html.H2(id="functions-title")], className="panel-header"),
             html.P(
-                ["How the selected force distributes its officers across the "
-                 "wider CIPFA Police Objective Analysis functions, compared "
-                 "with the national average. Click a force on the map or use "
-                 "the dropdown above."]
-                + ([html.Span(
-                        " Per-force values are synthetic placeholders pending "
-                        "the real workforce-functions data; the national split "
-                        "is the published 2025 figure.",
-                        className="mockup-note",
-                    )] if functions_loader.IS_MOCKUP else []),
+                "How the selected force distributes its officers across the "
+                "wider CIPFA Police Objective Analysis functions, compared "
+                "with the national average. Click a force on the map or use "
+                "the dropdown above.",
                 className="panel-caption",
             ),
             dcc.Graph(id="functions-graph", config={"displayModeBar": False}),
@@ -861,27 +844,12 @@ app.layout = html.Div([
 
     html.Section([
         html.Div([
-            html.Div(
-                [html.H2(id="forecast-title")]
-                + ([html.Span(
-                        "placeholder data",
-                        className="mockup-badge",
-                        title="Seeded synthetic forecast — the LightGBM model "
-                              "output is not in data/raw/.",
-                    )] if forecast_loader.IS_MOCKUP else []),
-                className="panel-header",
-            ),
+            html.Div([html.H2(id="forecast-title")], className="panel-header"),
             html.P(
-                [f"12-month {forecast_loader.MODEL_NAME} forecast (Mar 2026 – "
-                 "Feb 2027) of total predicted offences for the selected force, "
-                 "summed across the 14 categories (13 recorded + anti-social "
-                 "behaviour). Use the dropdown or click a force on the map."]
-                + ([html.Span(
-                        " Values are seeded synthetic placeholders pending the "
-                        "model output; the panel switches to the real forecast "
-                        "automatically once it lands in data/raw/.",
-                        className="mockup-note",
-                    )] if forecast_loader.IS_MOCKUP else []),
+                f"12-month {forecast_loader.MODEL_NAME} forecast (Mar 2026 – "
+                "Feb 2027) of total predicted offences for the selected force, "
+                "summed across the 14 categories (13 recorded + anti-social "
+                "behaviour). Use the dropdown or click a force on the map.",
                 className="panel-caption",
             ),
             dcc.Graph(id="forecast-graph", config={"displayModeBar": False}),

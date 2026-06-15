@@ -10,333 +10,244 @@ pinned: false
 
 # Police Resource Allocation Dashboard
 
-Dashboard for **TU/e 4CBLW020 — Real-World Crime project**.
+Dashboard for the **TU/e 4CBLW020 — Real-World Crime project**.
 
-Compares the current funding and officer distribution across the 43
-territorial police forces of England & Wales against a *harm-weighted*
-allocation derived from the Cambridge Crime Harm Index (CCHI). Shows
-whether forces are over- or under-resourced relative to the harm they
-handle.
+It asks a single question: **is each police force resourced in line with the
+harm it actually handles?** For the 42 territorial forces of England and Wales
+it compares the current distribution of funding (and officers) against a
+*harm-weighted* allocation derived from the Cambridge Crime Harm Index (CCHI),
+and shows where forces are over- or under-resourced.
+
+The project runs in three layers, all sharing one harm weighting:
+
+1. **Diagnose** — score the harm each force faces today from recorded crime
+   (2024/25) and compare it to current funding/officers (this dashboard's map).
+2. **Predict** — a LightGBM model forecasts the next 12 months of crime per
+   force and category (the forecast panel).
+3. **Optimise** — an integer linear program (ILP) reallocates the formula grant
+   and the workforce toward forecast harm (the reallocation panel).
 
 ## What's in the dashboard
 
-1. **Choropleth map** — coloured by allocation gap (resource share minus
-   harm share). Green = over-resourced, red = under-resourced.
-2. **Radar chart** — selected force's crime mix across 13 Home Office
-   recorded-crime categories, normalised against the national average
-   (grey reference).
-3. **Toggle: Budget vs Officers** — flips the resource basis. *Budget*
-   (default) compares each force's share of the £9.81 bn central
-   government grant pool against its harm share — the recommended basis,
-   because the evidence linking more officers to less crime is contested
-   and reallocating funding is more flexible (equipment, training,
-   specialist units, victim services, headcount). *Officers* compares
-   share of officer FTE (146,442 across England & Wales) against harm.
-4. **Toggle: Single CCHI per category vs Subgroup-weighted per force** —
-   flips the harm weighting between a single nationally-derived CCHI for
-   each of the 13 categories and a per-force weighted-average CCHI
-   derived from each force's actual subgroup mix (residential vs
-   non-residential burglary, possession vs trafficking, common assault vs
-   rape, etc.). The toggle only affects forces in the five multi-subgroup
-   categories — Violence and sexual offences, Burglary, Criminal damage
-   and arson, Drugs, Robbery. Watch the map redistribute colour for those
-   forces whose mix differs from the national average.
-5. **Proportional reallocation panel** — diverging horizontal bars per
-   force showing the recommended change (in £m under budget basis, FTE
-   under officer basis) if the national pool were redistributed by harm
-   share rather than the current formula. Capped axis, hover for exact
-   figures.
+- **Choropleth map** — every force coloured by its *allocation gap* (resource
+  share − harm share). Blue = over-resourced, red = under-resourced. A toggle
+  flips the resource basis between **funding (£)** and **officers (FTE)**.
+- **Crime-profile radar** — the selected force's mix across the 13 recorded
+  crime categories plus anti-social behaviour, normalised to the national
+  average (the grey circle). Click any force on the map to update it.
+- **Officer function mix** — how the force splits its officers across the 12
+  wider CIPFA Police Objective Analysis (POA) functions, against the national
+  split.
+- **Reallocation panel** — the ILP's recommended change per force: in formula
+  grant (£) on the funding basis, or in FTE for the chosen workforce pool
+  (patrol / investigators / PCSOs, or all three combined) on the officer basis.
+- **Crime forecast** — the LightGBM 12-month prediction (Mar 2026 – Feb 2027)
+  of total offences for the selected force.
+
+The map, radar and forecast all respond to the selected force; the basis and
+workforce-pool toggles drive the map and the reallocation panel.
+
+## Scope: 42 forces
+
+The raw Home Office releases cover the 43 territorial forces of England and
+Wales. The dashboard reports **42**: Greater Manchester is dropped project-wide
+because it is missing from the model team's forecast and ILP outputs, so keeping
+it would leave gaps in the predict/optimise layers. Headline totals are
+therefore over the 42 in scope — £16.69 bn total funding and 138,331 officer FTE
+(the Home Office national headline of 146,442 FTE includes Greater Manchester).
+
+## How harm is scored
+
+For each force, harm is its recorded crime weighted by the CCHI:
+
+```
+harm_force = Σ (category count × per-force CCHI)  +  ASB floor term
+```
+
+The CCHI weight is a starting-point sentence in days (Cambridge 2026 update).
+Nine of the 13 categories map to a single offence severity, so they carry one
+national value identical for every force (Robbery 365, Possession of weapons
+273.75, Public order 7.5, ... Shoplifting 1). Four composite categories bundle
+offence subgroups of different severity — Violence and sexual offences, Burglary,
+Criminal damage and arson, Drugs — so each force's value is the volume-weighted
+average of those subgroups under its *own* offence mix, and varies per force. A
+force with more residential burglary, or more homicide/rape within violence,
+earns a heavier weight per offence.
+
+These per-force weights live in `data/cchi_weights_by_force_category.csv` — the
+same file the model team's ILP consumed, so the map's harm picture and the
+optimiser outputs rest on one source of truth.
+
+**Anti-social behaviour** has no CCHI score (it is logged as incidents, not
+notifiable crime) and is absent from the recorded-crime tables. It is the single
+highest-volume thing a force handles, so it is represented at the harm *floor* —
+CCHI = 1, the value Cambridge gives the lowest notifiable offence — using
+forecast-derived volumes. It shows as a labelled 14th radar axis and a small
+additive harm term (~0.17% of national harm), never folded silently into the
+recorded figures.
+
+Full per-subgroup citations, the median-vs-mean sensitivity, and every
+documented deviation from the Sherman methodology are in
+[`data/raw/CCHI_SOURCES.md`](data/raw/CCHI_SOURCES.md).
+
+### Recorded now, forecast for allocation
+
+The map and radar score harm on *recorded* crime (2024/25) — the harm forces
+face today. The ILP was optimised against *forecast* harm (the predicted next 12
+months) under the same weights. The two are close but not identical (≈0.998
+correlation on harm share): diagnose on the actuals, optimise on the forecast.
+
+## The two bases
+
+- **Funding (£) — the headline.** Compares each force's share of *total* funding
+  (government grant + council-tax precept + ring-fenced specific grants, £16.69
+  bn) against its harm share. This is the recommended basis: the evidence linking
+  more officers to less crime is contested, and money is more flexible than
+  headcount (equipment, training, specialist units, victim services). The
+  reallocation moves only the £9.23 bn redistributable *formula grant*, holding
+  precept and specific grants fixed.
+- **Officers (FTE).** Compares each force's share of officer headcount (138,331
+  FTE) against harm, and reallocates the chosen workforce pool.
+
+The allocation gap is `resource share % − harm share %`: positive (blue) when a
+force has more than its harm suggests, negative (red) when it has less. Both gap
+columns sum to zero across the 42 forces by construction.
+
+City of London is a structural outlier — a national fraud/financial-crime
+specialist with a tiny resident population — so it sits outside the grant ILP
+(which covers 41 forces) and should be read as a special case.
+
+## Data
+
+Every figure is read from an official release or a committed model-team output;
+nothing is mocked or hand-typed. See
+[`data/raw/SOURCES.md`](data/raw/SOURCES.md) for release pages, dates and
+licensing.
+
+| Input | Source | Used for |
+|---|---|---|
+| `prc-pfa-mar2013-onwards-tables-230426.ods` | Home Office Police Recorded Crime, PFA tables (2024/25 sheet) | crime counts |
+| `open-data-table-police-workforce-280126.ods` | Home Office Police Workforce, 31 Mar 2025 snapshot | officer FTE |
+| `open-data-table-police-workforce-functions-280126.ods` | Home Office Police Workforce Functions | officer function mix |
+| `police-funding-england-and-wales-2015-to-2026-tables.ods` | Home Office Police Funding Statistics, Table 4a | total funding + precept |
+| `police-grant-2025-26.csv` | Home Office Police Grant Report 2025-26, 'Overall Total' | redistributable formula grant |
+| `Cambridge-CCHI-2026-update.xlsx` | Cambridge Crime Harm Index, 2026 update | source of the harm weights |
+| `cchi_weights_by_force_category.csv` | derived from the Cambridge index (see `CCHI_SOURCES.md`) | per-force CCHI weights |
+| `forecast_lgbm.csv` | model team's LightGBM forecast | forecast panel + ASB volumes |
+| `asb_counts.csv` | summed from the forecast | ASB floor term |
+| `ilp/*.csv` | model team's ILP optimiser | reallocation panel |
+
+The raw Home Office ODS files (~20 MB) are committed so the pipeline reproduces
+from source. They are excluded from the Docker image (`.dockerignore`) — the
+deploy runs off the committed snapshot in `data/snapshot/` instead.
+
+### Pipeline
+
+`data.py` assembles the per-force dataset: it loads each source through its
+loader, intersects the forces, drops Greater Manchester, rolls the PRC subgroups
+up to the 13 categories, weights them by the per-force CCHI, adds the ASB floor,
+and computes the share and gap columns. The cold parse re-reads several large
+ODS files and takes a few minutes, so the result is pickled to `data/cache/` and
+reused until a source file changes (or `python data.py --refresh`). A trimmed
+copy is committed to `data/snapshot/` for hosts that don't ship the raw files.
+
+Every loader fails loud — a missing file, an unmapped crime subgroup, a total
+that doesn't reconcile, a force missing from one source — rather than silently
+producing a wrong number. The reconciliation checks (officer FTE, grant total,
+precept total, gaps summing to zero) are listed in `CCHI_SOURCES.md` and
+`SOURCES.md`.
 
 ## Setup
 
 ```bash
 pip install -r requirements.txt
-```
-
-Then download the Home Office ODS files into `data/raw/` (gitignored
-because of size and Open Government Licence redistribution constraints):
-
-- `prc-pfa-mar2013-onwards-tables-230426.ods` — Police Recorded Crime,
-  Police Force Area open data tables (gov.uk).
-- `open-data-table-police-workforce-280126.ods` — Police Workforce open
-  data table (gov.uk).
-- `open-data-table-police-workforce-functions-280126.ods` — Police
-  Workforce functions open data table (gov.uk).
-- `police-funding-england-and-wales-2015-to-2026-tables.ods` — Home
-  Office historical police funding tables (not wired into the dashboard
-  yet — kept for future historical-year work).
-
-The remaining sources are small enough to commit and do not need a
-separate download:
-
-- `data/raw/Cambridge-CCHI-2026-update.xlsx` (~400 KB) — Cambridge CCHI
-  2026 update.
-- `data/raw/police-grant-2025-26.csv` — central government grant per
-  force, extracted from the Police Grant Report (England and Wales)
-  2025-26.
-
-See `data/raw/SOURCES.md` for release pages and licensing. The loaders
-raise a clear `FileNotFoundError` pointing back to that file if any
-source is missing.
-
-```bash
 python app.py
 ```
 
 Then open `http://127.0.0.1:8050`.
 
-The first run additionally downloads a ~340KB GeoJSON of the Police Force
-Areas (December 2023) from the ONS Open Geography Portal and caches it
-under `data/`. Subsequent runs are offline.
+On first run the app downloads a ~340 KB GeoJSON of the Police Force Areas
+(December 2023) from the ONS Open Geography Portal and caches it under `data/`;
+later runs are offline. The first dataset build parses the source spreadsheets
+(a few minutes) and caches the result — every later start is instant.
 
-The first run also parses the source spreadsheets to assemble the dataset,
-which takes a few minutes, and caches the result under `data/cache/`. Every
-later start loads that cache instantly; it is rebuilt automatically when a
-source file changes, or on demand with `python data.py --refresh`.
+## Deploy
 
-## Data
-
-Every figure shown is read from the official Home Office and Cambridge
-releases listed above. No ratios are mocked or generated.
-
-- **Crime counts** — file `prc-pfa-mar2013-onwards-tables-230426.ods`,
-  sheet `2024_25` (25,356 rows). Home Office Police Recorded Crime,
-  Police Force Area open data tables, released 23 April 2026. PRC
-  covers the financial year 2024/25 (Q1–Q4) summed per force and
-  per Offence Subgroup. Action Fraud, CIFAS, UK Finance, and British
-  Transport Police are filtered out as they are not territorial PFAs.
-  The 23 PRC Offence Subgroups in scope roll up to 13 dashboard
-  categories; the loader fails loudly if a subgroup goes unmapped
-  (e.g. after a future taxonomy change).
-- **Officer FTE** — file `open-data-table-police-workforce-280126.ods`,
-  sheet `Data`. Home Office Police Workforce, England and Wales open
-  data table, released 28 January 2026. The dashboard uses the
-  snapshot at 31 March 2025 with `Worker type = "Police Officer"`,
-  summed by Force name. 43 territorial forces; British Transport
-  Police excluded.
-- **Central government grant** — file `police-grant-2025-26.csv`. Home
-  Office Police Grant Report (England and Wales) 2025-26, 'Overall
-  Total' column per force: Police Main Grant + ex-DCLG Formula Funding
-  + Legacy Council Tax Grants + Welsh Top-Up. £9.81 bn national pool
-  across the same 43 territorial forces. Council tax precept (locally
-  raised, ~40 % of total force funding) is excluded by design — only
-  the centrally-controlled pool is redistributable. Welsh forces carry
-  £0 in the DCLG and legacy components (those streams are routed
-  through the Welsh Government separately), so the Overall Total for
-  the four Welsh forces reflects Police Main Grant + Welsh Top-Up only.
-- **Harm weights**: Cambridge Crime Harm Index, 2026 update
-  (Sherman, Neyroud, Neyroud — Cambridge Centre for Evidence-Based
-  Policing). One CCHI value per PRC Offence Subgroup, taken as the
-  median of all Sherman 2026 entries that fall under it. Median is
-  preferred over mean for robustness to rare-but-severe offences within
-  a subgroup. Per-subgroup citations, mean-vs-median sensitivity, and
-  documented deviations from the Sherman methodology are in
-  `data/raw/CCHI_SOURCES.md`.
-
-### Pipeline
-
-When `python app.py` starts it assembles the per-force dataset through the
-steps below, caches the result to `data/cache/` (pickled), and serves it to
-every browser request. The cold assembly re-parses several large Home Office
-ODS / XLSX files and takes a few minutes; the cache turns every subsequent
-start into an instant load. It rebuilds automatically whenever a source file
-in `data/raw/` changes, and `python data.py --refresh` forces a rebuild.
-Nothing is transcribed by hand; every figure on the dashboard traces back to
-an open-data release through the loaders.
-
-1. **Load PRC counts** — `prc_loader.load_force_subgroup_counts()`.
-   Reads the `2024_25` sheet of the PRC ODS, drops the four
-   non-territorial entries (BTP, Action Fraud, CIFAS, UK Finance),
-   normalises force-name spellings (`London, City of` → `City of London`),
-   verifies that all four financial quarters are present, and pivots to
-   a 43 × 23 force × Offence Subgroup matrix. Pre-2017 burglary labels
-   (Domestic / Non-domestic) are dropped automatically because their
-   2024/25 totals are zero.
-2. **Load officer FTE** — `workforce_loader.load_force_fte()`.
-   Reads the `Data` sheet of the workforce ODS, filters to the 31 March
-   2025 snapshot with `Worker type = "Police Officer"`, normalises
-   `Hampshire and Isle of Wight` → `Hampshire`, and sums Total (FTE) by
-   force. Returns a dict.
-3. **Load central grant per force** — `budget_loader.load_force_budget()`.
-   Reads the 43-row `police-grant-2025-26.csv` (canonical force names,
-   integer £ values), validates that the national total reconciles to
-   £9,806,553,489 within £100 rounding, and returns a dict.
-4. **Load CCHI per subgroup** — `cchi_loader.load_subgroup_cchi()`.
-   Reads `CCHI 2026 values sheet` from the Cambridge XLSX, drops rows
-   whose `FULL_OFFENCE_TITLE` is flagged `EXPIRED` (six retired offence
-   codes with cutoffs spanning 31/03/17 to 31/03/25 — they no longer
-   appear in the PRC tables and so should not be allowed to weight the
-   active codes), and applies the PRC → Sherman SUB_GROUP mapping.
-   Fourteen of the twenty-three PRC subgroups match a Sherman
-   SUB_GROUP exactly; the remaining nine are resolved by pooling 2–4
-   Sherman labels (Residential burglary, Public order, Vehicle), by
-   label renames (trailing `offences` dropped, `BURGLARY - BUSINESS
-   AND COMMUNITY`, `MISC` abbreviation), or by `FULL_OFFENCE_TITLE`
-   pattern (Death/driving — no dedicated Sherman SUB_GROUP). Returns
-   the median CCHI per PRC subgroup.
-5. **Build the per-force dataset** — `data.build_dataset()`.
-   For each of the 43 territorial forces, computes harm under both
-   scenarios (sum of count × CCHI, with subgroup mix either per-force
-   or set to the national share), the officer / budget / harm shares,
-   and the four allocation-gap columns (officer or budget × flat or
-   subgroup-weighted). Also produces a per-force category mix profile
-   for the radar.
-6. **Cache the ONS PFA GeoJSON** — `geo.get_pfa_geojson()`.
-   On first run downloads the ~340 KB Police Force Areas (December
-   2023, ultra-generalised) boundary file from the ONS Open Geography
-   Portal, rewrites two force-name variants (`Devon & Cornwall` and
-   `London, City of`), and caches to `data/pfa_2023_buc.geojson`.
-   Subsequent runs read from disk.
-7. **Render** — `app.py`.
-   Dash builds the choropleth from the dataset and the GeoJSON, keyed
-   on force name. The basis toggle switches between the budget and
-   officer columns; the CCHI toggle switches between flat and
-   subgroup-weighted harm shares. Clicking a force on the map fires a
-   callback that updates the radar chart with that force's crime mix
-   against the national baseline.
-
-### Toolkit
-
-- `pandas` — data wrangling, joins, group-by aggregations
-- `dash` + `plotly` — interactive web app and charts
-- `openpyxl`, `odfpy` — XLSX and ODS spreadsheet readers
-- `requests` — fetches the ONS GeoJSON on first run
-
-### Methodology
-
-For each force F, harm is summed at the subgroup level:
-
-```
-harm_F = Σ_subgroup (count_{F,subgroup} × CCHI_subgroup)
-```
-
-`CCHI_subgroup` is built in two aggregation layers, each using the rule
-that the available data supports:
-
-1. **Sherman URN → PRC subgroup — median.** Sherman 2026 publishes
-   scores at offence-code (ATHENA URN) level. PRC publishes counts at
-   subgroup level only, so URN-level volume weighting is not possible.
-   Each PRC subgroup's CCHI is therefore the median of all Sherman
-   entries that map to it — robust to rare-but-severe offences
-   (firearms within Possession of weapons; GBH-with-intent within
-   Violence with injury) that would otherwise pull a mean far above the
-   typical reported offence.
-2. **PRC subgroup → dashboard category — volume-weighted average.**
-   Eight of the 13 dashboard categories contain a single PRC subgroup;
-   their category CCHI is just the subgroup median. The other five
-   (Violence and sexual offences, Burglary, Drugs, Robbery, Criminal
-   damage and arson) take a volume-weighted average of their subgroup
-   medians, with PRC counts as the weights. The toggle picks which
-   counts:
-
-- **Subgroup-weighted per force**: weights are each force's own
-  subgroup counts. A force with a heavier residential-burglary share
-  scores higher per offence in the Burglary category than a force whose
-  burglary mix tilts non-residential.
-- **Single CCHI per category**: weights are the national subgroup
-  counts. One nationally-derived CCHI per category, applied identically
-  to every force. This isolates the effect of crime *volume* alone
-  (forces are no longer rewarded or penalised for category mix). The
-  toggle only changes anything for the five multi-subgroup categories.
-
-The allocation gap (resource share % − harm share %) is positive when a
-force has more resources than harm suggests is needed, negative when it
-has fewer. Both the budget basis (budget share − harm share) and the
-officer basis (officer share − harm share) gap columns sum to zero across
-the 43 territorial forces by construction.
-
-### Sanity checks
-
-- 43 territorial PFAs in all three sources (PRC, workforce, central
-  grant), with identical naming after normalisation (`London, City of`
-  → `City of London`, `Hampshire and Isle of Wight` → `Hampshire`).
-- Total officer FTE sums to 146,442, matching the Home Office published
-  headline for 31 March 2025.
-- Total central grant reconciles to £9,806,553,489, matching the
-  published Police Grant Report 2025-26 national total within £100
-  rounding.
-- Allocation gaps sum to zero under both bases (officer / budget /
-  harm shares each sum to 100 %).
-- Per-force crime profiles each sum to 1.0.
-
-### Known gaps and documented deviations
-
-- **Anti-social behaviour** is not in PRC (it is recorded as incidents
-  rather than crimes), so the radar has 13 axes rather than 14. ASB
-  exists in the data.police.uk record-level data and could be added as
-  a 14th axis once that pipeline is integrated.
-- **Per-force resolution rate** is not published in the Home Office
-  outcomes table for non-fraud offences. The Sherman formula
-  `count × weight × (1 − resolution_rate)` is therefore reduced to
-  `count × weight` here. Reintroducing it is one constant-multiplier
-  line once per-force outcome data lands.
-- **Proactive offences are included.** Sherman 2016 recommends excluding
-  drug arrests, traffic arrests, and shop-detective shoplifting from the
-  harm count base on the grounds that their volume reflects police
-  resourcing rather than crime patterns. The dashboard includes these
-  because its purpose is to measure police *workload*-relevant harm —
-  drug enforcement and shoplifting are real demands on police time. This
-  is a deliberate deviation from Sherman's recommended scope, fully
-  documented in `data/raw/CCHI_SOURCES.md`.
-- **Subgroup-level (not URN-level) CCHI aggregation.** PRC PFA tables
-  publish counts at the Offence Subgroup level only. URN-level counts
-  would allow more rigorous within-subgroup volume weighting, but
-  require record-level data from data.police.uk that is not currently in
-  the pipeline.
+The app is hosted on Hugging Face Spaces (Docker SDK). The `Dockerfile` serves
+it with gunicorn on port 7860, off the committed snapshot, so the host needs
+none of the raw ODS files. The Hugging Face front-matter is at the top of this
+file (`app_port` must match the bind in the `Dockerfile`).
 
 ## Files
 
 ```
-app.py                    Dash app — layout and callbacks
-data.py                   Builds the per-force allocation dataset (disk-cached)
-cache.py                  On-disk cache for the assembled dataset + function mix
-prc_loader.py             Reads the Home Office Police Recorded Crime ODS
-workforce_loader.py       Reads the Home Office Police Workforce ODS
-budget_loader.py          Reads the Police Grant Report 2025-26 per-force CSV
-functions_loader.py       Officer function mix per force (CIPFA POA categories)
-allocation_loader.py      Recommended vs current allocation per force (FTE or £)
-cchi_loader.py            Reads the Cambridge CCHI 2026 spreadsheet and
-                          computes one median CCHI per PRC Offence Subgroup
-geo.py                    ONS PFA boundaries (downloads + caches on first run)
-build_assets.py           Generates standalone HTML exports for sharing
-assets/style.css          Custom styling
-data/raw/SOURCES.md       Provenance and download links for all source files
-data/raw/CCHI_SOURCES.md  Methodology document for the harm weighting:
-                          per-subgroup citation chain, aggregation rule,
-                          documented deviations, known limitations
-requirements.txt
+app.py                 Dash app — layout, figures and callbacks
+data.py                Builds the per-force dataset (disk-cached + snapshot)
+cache.py               On-disk cache for the expensive startup parses
+geo.py                 ONS PFA boundaries (downloads + caches on first run)
+build_assets.py        Generates a static comparison map for slides/report
+
+prc_loader.py          Police Recorded Crime counts per force x subgroup
+workforce_loader.py    Officer FTE per force (31 Mar 2025)
+functions_loader.py    Officer function mix per force (CIPFA POA functions)
+grant_loader.py        Redistributable formula grant per force
+funding_loader.py      Total funding + precept per force (Table 4a)
+cchi_loader.py         Per-force CCHI weights + the ASB floor constant
+asb_loader.py          Forecast-derived ASB volumes per force
+forecast_loader.py     LightGBM 12-month forecast (long format)
+allocation_loader.py   Reads the ILP outputs (grant + workforce pools)
+
+assets/style.css       Styling
+data/raw/SOURCES.md    Provenance + download links for every source
+data/raw/CCHI_SOURCES.md  Harm-weighting methodology and limitations
+model/police_workforce_ilp.py  The team's ILP (see below)
 ```
 
-## Sharable assets
+## Model team's work
 
-Generate two static HTML exports for slides, screenshots, or chat:
+The forecast and the ILP are the predictor/optimisation teammates' deliverables.
+The dashboard reads their **committed outputs** (`data/raw/forecast_lgbm.csv`,
+`data/raw/ilp/*.csv`); it does not run their models. `model/police_workforce_ilp.py`
+is included as the reference implementation of the workforce ILP — it documents
+how the `ilp/` outputs were produced. It is run by the model team against their
+own inputs and needs `pulp` + `matplotlib` (not in this dashboard's
+`requirements.txt`).
+
+## Sharable assets
 
 ```bash
 python build_assets.py
 ```
 
-Outputs:
+Writes `exports/comparison.html` — side-by-side maps of the allocation gap under
+the officer and funding bases on one colour scale. Open in a browser and
+screenshot for the report or slides.
 
-- `exports/comparison.html` — side-by-side maps: single CCHI per category
-  vs subgroup-weighted per force, same colour scale. Open in browser,
-  then screenshot.
-- `exports/animated.html` — single map that animates between the two
-  scenarios. Drag the slider or hit play.
+## Known gaps and next steps
 
-Re-run after any change to `data.py` to refresh both files.
+- **Crime hotspots** — five hotspots per force are planned as a later addition;
+  they are not in the dashboard yet.
+- **Resolution rate** — the full Sherman formula multiplies harm by
+  `(1 − clearance rate)`. The Home Office outcomes table only publishes per-force
+  clearance for fraud, so the dashboard uses `count × weight` and treats clearance
+  as uniform. Reintroducing it is a one-line change once per-force data lands.
+- **Proactive offences are included** (drug/traffic arrests, shoplifting). Sherman
+  2016 recommends excluding them; the dashboard keeps them because it measures
+  police *workload*-relevant harm. A documented, deliberate deviation — see
+  `CCHI_SOURCES.md`.
+- **Subgroup-level CCHI** — PRC publishes counts at offence-subgroup level, not
+  URN level, so the harm weighting joins at subgroup granularity.
 
 ## Source attribution
 
-- Crime counts: Home Office, *Police Recorded Crime, Police Force Area
-  open data tables* (released 23 April 2026), Open Government Licence.
-- Officer FTE: Home Office, *Police Workforce, England and Wales: 31
-  March 2025* (released 28 January 2026), Open Government Licence.
-- Central grant: Home Office, *Police Grant Report (England and Wales)
-  2025-26* (statutory instrument laid 5 February 2025), Open Government
-  Licence. Per-force 'Overall Total' column.
-- Harm weights: Cambridge Centre for Evidence-Based Policing,
-  *Cambridge Crime Harm Index, 2026 update*. Foundational paper:
-  Sherman, Neyroud, Neyroud (2016), Policing 10(3): 171–183.
-- Boundaries: ONS Open Geography Portal, Police Force Areas (December
-  2023) BUC.
-- Police force list: data.police.uk / Home Office.
+- Crime counts: Home Office, *Police Recorded Crime, PFA open data tables*
+  (released 23 April 2026), Open Government Licence.
+- Officer FTE and functions: Home Office, *Police Workforce, England and Wales:
+  31 March 2025* (released 28 January 2026), Open Government Licence.
+- Funding: Home Office, *Police Grant Report 2025-26* and *Police Funding
+  Statistics* (Table 4a), Open Government Licence.
+- Harm weights: Cambridge Centre for Evidence-Based Policing, *Cambridge Crime
+  Harm Index, 2026 update*. Foundational paper: Sherman, Neyroud, Neyroud (2016),
+  Policing 10(3): 171–183.
+- Boundaries: ONS Open Geography Portal, Police Force Areas (December 2023) BUC.
+- Forecast and allocation: the project's own LightGBM and ILP model outputs.

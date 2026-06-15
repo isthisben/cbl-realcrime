@@ -7,9 +7,8 @@ Output (written to exports/):
                       total funding — on one shared colour scale. Open in a
                       browser, then screenshot for chat / slides / report.
 
-Both maps use the single per-force CCHI harm weighting (cchi_loader); the
-left compares officer share to harm share, the right compares total-funding
-share to harm share.
+Both maps use the same per-force CCHI harm weighting; the left compares officer
+share to harm share, the right compares total-funding share to harm share.
 
 Re-run any time the dashboard data changes:
     python build_assets.py

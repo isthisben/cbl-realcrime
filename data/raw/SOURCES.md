@@ -8,6 +8,13 @@ per-force CCHI weight file (derived from the Cambridge index — see
 `CCHI_SOURCES.md`) and the model team's forecast + ILP outputs (see "Model team
 outputs" below).
 
+**Scope note.** The raw Home Office releases cover the 43 territorial police
+forces of England and Wales. The dashboard reports **42** of them — Greater
+Manchester is dropped project-wide because it is absent from the model team's
+forecast and ILP outputs. So where a file below is described as covering "43
+forces" that is the raw release; the assembled dashboard totals (e.g. £16.69 bn
+total funding, 138,331 officer FTE) are over the 42 forces in scope.
+
 ## prc-pfa-mar2013-onwards-tables-230426.ods
 
 Police recorded crime — Police Force Area open data tables.
@@ -175,9 +182,10 @@ aggregation rule used by the dashboard are documented in
 ## Model team outputs (forecast + ILP)
 
 Produced inside the project by the predictor / optimisation teammates, not
-downloaded. They are committed so the dashboard and its deploy ship with them;
-`.claude/ingest_model_outputs.py` records how the raw deliverables were
-normalised into the files below.
+downloaded. They are committed so the dashboard and its deploy ship with them.
+The raw deliverables were normalised into the files below — long force names
+("X Constabulary" / "X Police") mapped to the canonical 42, and the monthly
+forecast kept in long format.
 
 ### data/raw/forecast_lgbm.csv
 

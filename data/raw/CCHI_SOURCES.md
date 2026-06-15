@@ -122,7 +122,7 @@ dominated by violence and burglary, the dashboard sets it at the harm **floor**
 gives the lowest notifiable offence (shoplifting). ASB volumes are
 forecast-derived (`asb_loader`, from the LightGBM forecast, data.police.uk
 lineage), so ASB appears as a labelled 14th radar axis and a small additive
-harm term (~0.2% of national harm) — never folded silently into the recorded
+harm term (~0.17% of national harm) — never folded silently into the recorded
 figures.
 
 ## Recorded now, forecast for allocation

@@ -3,16 +3,13 @@ Per-force anti-social behaviour volume, in incidents per year.
 
     load_force_asb_counts()  ->  {force: asb_annual_count}
 
-ASB is not in the Home Office Police Recorded Crime tables the rest of the
-dashboard counts from — it is logged as incidents, not notifiable crime — so
-there is no recorded-crime figure to use. The only per-force ASB volume the
-project has is the model team's 12-month forecast (data.police.uk lineage),
-summed to an annual figure. The dashboard therefore treats ASB as a
-forecast-derived floor category: every panel that surfaces it carries that
-caveat, and it is weighted at the CCHI floor (`cchi_loader.ASB_FLOOR_CCHI`).
+ASB isn't in the Home Office Police Recorded Crime tables — it is logged as
+incidents, not notifiable crime — so there is no recorded count to use. The one
+per-force ASB volume the project has is the model team's 12-month forecast,
+summed to an annual figure, so the dashboard treats ASB as a forecast-derived
+floor category weighted at the CCHI floor (`cchi_loader.ASB_FLOOR_CCHI`).
 
-Source file: data/raw/asb_counts.csv  (built by .claude/ingest_model_outputs.py
-from the LightGBM forecast; see data/raw/CCHI_SOURCES.md)
+Source file: data/raw/asb_counts.csv (forecast-derived; see data/raw/SOURCES.md).
 """
 
 from __future__ import annotations
@@ -29,7 +26,7 @@ def load_force_asb_counts() -> dict[str, float]:
     if not SOURCE.exists():
         raise FileNotFoundError(
             f"ASB counts file not found at {SOURCE}. "
-            "Build it with .claude/ingest_model_outputs.py (forecast-derived)."
+            "It is forecast-derived — see data/raw/SOURCES.md."
         )
     df = pd.read_csv(SOURCE)
     required = {"force", "asb_annual_count"}

@@ -47,9 +47,9 @@ html, body {
 }
 
 /* ---- Controls (toggle + dropdown + explainer) ---- */
-/* Toggle bar pinned to the top of the viewport so the basis / CCHI toggles
-   stay reachable from any scroll position — flip them and watch the map or
-   the reallocation panel update without scrolling back up to a fixed bar. */
+/* Toggle bar pinned to the top of the viewport so the basis and pool toggles
+   stay reachable from any scroll position — flip them and watch the map and
+   the reallocation panel update without scrolling back up. */
 .controls-bar {
     position: sticky;
     top: 0;
@@ -321,25 +321,6 @@ html, body {
 /* ---- Officer functions panel ---- */
 .functions-row {
     margin-bottom: 18px;
-}
-
-.mockup-badge {
-    background: #fef3c7;
-    color: #92651a;
-    border: 1px solid #f5d98a;
-    padding: 1px 8px;
-    border-radius: 10px;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    cursor: help;
-    white-space: nowrap;
-}
-
-.mockup-note {
-    color: #92651a;
-    font-style: italic;
 }
 
 /* ---- Proportional reallocation panel ---- */
