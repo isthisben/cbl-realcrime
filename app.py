@@ -50,11 +50,14 @@ ALLOCATION_FTE = {
 POOL_SUMMARY      = allocation_loader.pool_summary()
 FORECAST_DF       = forecast_loader.load_forecast()
 HOTSPOTS_DF       = hotspots_loader.load_hotspots()
-HOTSPOT_FORCES    = set(HOTSPOTS_DF["force"])
 
 DEFAULT_FORCE = "Metropolitan Police"
 DEFAULT_BASIS = "budget"
 DEFAULT_POOL  = "all"
+
+# Sentinel "force" for the national overview — selectable in the force dropdown,
+# handled as a special case by the radar, functions, and forecast panels.
+NATIONAL_KEY  = "England & Wales (national)"
 
 # Pool selector options (FTE basis): the three pools plus the combined view.
 POOL_OPTIONS = (
@@ -177,12 +180,61 @@ def build_map(basis: str, selected_force: str | None) -> go.Figure:
     return fig
 
 
+def _build_radar_national() -> go.Figure:
+    """National crime profile for England & Wales: each of the 14 display
+    categories as its share of all recorded crime (plus the ASB floor). The
+    per-force radars are ratios *against* this national mix, so for the nation
+    itself a ratio would be a flat circle — this view plots the shares directly."""
+    theta  = [data.CRIME_TYPE_SHORT[ct] for ct in data.DISPLAY_CATEGORIES]
+    shares = [NATIONAL_PROFILE[ct] * 100 for ct in data.DISPLAY_CATEGORIES]
+    theta_closed  = theta + [theta[0]]
+    shares_closed = shares + [shares[0]]
+
+    fig = go.Figure(go.Scatterpolar(
+        r=shares_closed,
+        theta=theta_closed,
+        name="England & Wales",
+        mode="lines+markers",
+        line=dict(color="#1f3a5f", width=2),
+        marker=dict(size=5, color="#1f3a5f"),
+        fill="toself",
+        fillcolor="rgba(31,58,95,0.25)",
+        hovertemplate="<b>%{theta}</b><br>%{r:.1f}% of national recorded crime"
+                      "<extra></extra>",
+    ))
+    fig.update_layout(
+        polar=dict(
+            bgcolor="#fafafa",
+            radialaxis=dict(
+                visible=True,
+                range=[0, max(shares) * 1.1],
+                ticksuffix="%",
+                gridcolor="#dcdcdc",
+                tickfont=dict(size=9, color="#666"),
+            ),
+            angularaxis=dict(
+                tickfont=dict(size=10, color="#333"),
+                gridcolor="#e5e5e5",
+            ),
+        ),
+        showlegend=False,
+        margin=dict(l=40, r=40, t=20, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        height=460,
+    )
+    return fig
+
+
 def build_radar(force_name: str) -> go.Figure:
     """
     13-axis radar of the force's crime mix vs the national average.
     National average shows up as a unit circle (1.0 on every axis);
     force values are ratios of force_share / national_share.
+    The national overview is an absolute-share radar instead (see helper above).
     """
+    if force_name == NATIONAL_KEY:
+        return _build_radar_national()
+
     row = DF[DF["force"] == force_name].iloc[0]
     profile = row["crime_profile"]
 
@@ -265,7 +317,33 @@ def build_functions(force_name: str) -> go.Figure:
     the national split is the whole point here, and segments are far easier
     to read side by side than stacked. The force bar carries the difference
     from national in its hover so over-/under-investment reads at a glance.
+
+    The national overview shows the national split on its own (no comparison
+    series — the force bar would just duplicate it).
     """
+    if force_name == NATIONAL_KEY:
+        cats = list(reversed(functions_loader.FUNCTIONS))
+        nat  = [functions_loader.NATIONAL_SHARES[c] for c in cats]
+        fig = go.Figure(go.Bar(
+            y=cats, x=nat, orientation="h",
+            marker_color="#1f3a5f",
+            hovertemplate="<b>%{y}</b><br>National: %{x:.1f}%<extra></extra>",
+        ))
+        fig.update_layout(
+            bargap=0.28,
+            margin=dict(l=10, r=20, t=28, b=34),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=460,
+            xaxis=dict(
+                title=dict(text="Share of officers (%)", font=dict(size=11)),
+                ticksuffix="%", gridcolor="#eef0f2", zeroline=False,
+            ),
+            yaxis=dict(automargin=True, tickfont=dict(size=10, color="#333")),
+            font=dict(size=11),
+        )
+        return fig
+
     row = FUNCTIONS_DF.loc[force_name]
 
     # FUNCTIONS is ordered largest-share-first; horizontal bars stack from
@@ -440,7 +518,8 @@ def build_forecast(force_name: str) -> go.Figure:
     predicted offences per month, summed across the 14 categories (13 + ASB).
     Reads the model team's LightGBM output from data/raw/forecast_lgbm.csv.
     """
-    rows   = FORECAST_DF[FORECAST_DF["force"] == force_name]
+    rows   = (FORECAST_DF if force_name == NATIONAL_KEY
+              else FORECAST_DF[FORECAST_DF["force"] == force_name])
     months = sorted(rows["month"].unique())
     total_by_month = rows.groupby("month")["y_pred"].sum().reindex(months)
 
@@ -475,124 +554,194 @@ def build_forecast(force_name: str) -> go.Figure:
     return fig
 
 
-def _hotspot_zoom(lats, lons) -> float:
-    """A rough map zoom that keeps a force's five points comfortably in view —
-    tight for a clustered city force, wider for a spread-out rural one."""
-    span = max(float(lats.max() - lats.min()),
-               float(lons.max() - lons.min()), 0.02)
-    return min(12.5, max(7.5, math.log2(150.0 / span)))
+def build_hotspots_all() -> go.Figure:
+    """All forces' stop-and-search hotspots on one England & Wales map: every
+    force's five busiest search locations (data.police.uk, 2023-2026). Marker
+    size is the number of searches (sqrt-scaled against the national busiest, so
+    the largest forces don't dwarf the rest); colour is the find rate where the
+    force reports linked outcomes, neutral grey where it reports none (a real 0%
+    would mislead). Stop-and-search is published for 39 of the 42 forces."""
+    df = HOTSPOTS_DF
+    smax = float(df["searches"].max())
 
+    def _sizes(s):
+        return [6.0 + 22.0 * math.sqrt(v / smax) for v in s]
 
-def build_hotspots(force_name: str) -> go.Figure:
-    """
-    The selected force's five stop-and-search hotspots on a street map — the
-    locations with the most searches (data.police.uk, 2023-2026). Point size is
-    the number of searches, colour is the find rate (share of searches with a
-    linked outcome). The three forces with no published stop-and-search data
-    get a short note instead of a map.
-    """
-    rows = HOTSPOTS_DF[HOTSPOTS_DF["force"] == force_name]
-    if rows.empty:
-        fig = go.Figure()
-        fig.add_annotation(
-            text="No stop-and-search data is published for this force.",
-            x=0.5, y=0.5, xref="paper", yref="paper",
-            showarrow=False, font=dict(size=13, color="#777"),
-        )
-        fig.update_layout(
-            height=460,
-            margin=dict(l=10, r=10, t=10, b=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="#fafafa",
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-        )
-        return fig
+    # Split by whether the force reports any linked outcomes, so a force that
+    # records searches but no finds (e.g. the Met) shows neutral grey rather
+    # than a misleading dark "0%".
+    finds_by_force = df.groupby("force")["linked_finds"].transform("sum")
+    with_finds = df[finds_by_force > 0]
+    no_finds   = df[finds_by_force == 0]
 
-    rows = rows.sort_values("rank")
-    searches = rows["searches"].to_numpy()
-    # Size each marker against the busiest of the force's own five hotspots
-    # (12-40 px), so relative search volume reads at a glance.
-    smax = searches.max()
-    sizes = 12.0 + 28.0 * (searches / smax)
+    fig = go.Figure()
 
-    # A few forces (e.g. the Met) report searches but no linked outcomes in the
-    # extract, so a find rate would be misleading (it would read as a real 0%).
-    # Colour those neutrally and drop the find rate from the colour + hover.
-    has_finds = rows["linked_finds"].sum() > 0
-
-    if has_finds:
-        marker = dict(
-            size=sizes,
-            color=rows["find_rate"],
-            cmin=0.0, cmax=1.0,
-            colorscale="Viridis",
-            colorbar=dict(
-                title=dict(text="Find rate", side="top"),
-                thickness=14, len=0.7, x=0.99,
-                tickformat=".0%",
+    if not with_finds.empty:
+        fig.add_trace(go.Scattermap(
+            lat=with_finds["lat"], lon=with_finds["lon"], mode="markers",
+            marker=dict(
+                size=_sizes(with_finds["searches"]),
+                color=with_finds["find_rate"], cmin=0.0, cmax=1.0,
+                colorscale="Viridis",
+                colorbar=dict(title=dict(text="Find rate", side="top"),
+                              thickness=14, len=0.7, x=0.99, tickformat=".0%"),
+                opacity=0.85,
             ),
-            opacity=0.9,
-        )
-        custom = list(zip(rows["rank"], rows["searches"], rows["linked_finds"],
-                          (rows["find_rate"] * 100).round(1)))
-        hovertemplate = (
-            "<b>Hotspot #%{customdata[0]}</b><br>"
-            "Searches: %{customdata[1]:,}<br>"
-            "Linked finds: %{customdata[2]:,}<br>"
-            "Find rate: %{customdata[3]}%"
-            "<extra></extra>"
-        )
-    else:
-        marker = dict(size=sizes, color="#8d99ae", opacity=0.9)
-        custom = list(zip(rows["rank"], rows["searches"]))
-        hovertemplate = (
-            "<b>Hotspot #%{customdata[0]}</b><br>"
-            "Searches: %{customdata[1]:,}<br>"
-            "Find data not available for this force"
-            "<extra></extra>"
-        )
+            customdata=list(zip(with_finds["force"], with_finds["rank"],
+                                with_finds["searches"],
+                                (with_finds["find_rate"] * 100).round(1))),
+            hovertemplate=("<b>%{customdata[0]}</b> — hotspot #%{customdata[1]}<br>"
+                           "Searches: %{customdata[2]:,}<br>"
+                           "Find rate: %{customdata[3]}%<extra></extra>"),
+        ))
 
-    fig = go.Figure(go.Scattermap(
-        lat=rows["lat"], lon=rows["lon"],
-        mode="markers+text",
-        text=rows["rank"].astype(str),
-        textfont=dict(size=10, color="#ffffff"),
-        textposition="middle center",
-        marker=marker,
-        customdata=custom,
-        hovertemplate=hovertemplate,
-    ))
+    if not no_finds.empty:
+        fig.add_trace(go.Scattermap(
+            lat=no_finds["lat"], lon=no_finds["lon"], mode="markers",
+            marker=dict(size=_sizes(no_finds["searches"]),
+                        color="#8d99ae", opacity=0.85),
+            customdata=list(zip(no_finds["force"], no_finds["rank"],
+                                no_finds["searches"])),
+            hovertemplate=("<b>%{customdata[0]}</b> — hotspot #%{customdata[1]}<br>"
+                           "Searches: %{customdata[2]:,}<br>"
+                           "Find data not reported<extra></extra>"),
+        ))
+
     fig.update_layout(
         map=dict(
             style="carto-positron",
-            center=dict(lat=rows["lat"].mean(), lon=rows["lon"].mean()),
-            zoom=_hotspot_zoom(rows["lat"], rows["lon"]),
+            center=dict(lat=float(df["lat"].mean()), lon=float(df["lon"].mean())),
+            zoom=5.2,
         ),
-        # Key the UI state to the force so the map jumps to the newly selected
-        # force; a manual zoom/pan is kept only while the force is unchanged.
-        # Without this the map stays parked on the previously viewed force.
-        uirevision=force_name,
+        uirevision="all-forces",
+        showlegend=False,
         margin=dict(l=0, r=0, t=0, b=0),
-        height=460,
+        height=560,
         paper_bgcolor="rgba(0,0,0,0)",
     )
     return fig
 
 
-def hotspots_summary(force_name: str) -> str:
-    """One-line headline for the hotspots panel: total searches across the
-    force's five hotspots, and the combined find rate where outcomes exist."""
-    rows = HOTSPOTS_DF[HOTSPOTS_DF["force"] == force_name]
-    if rows.empty:
-        return ""                       # no-data force; the map carries its note
-    searches = int(rows["searches"].sum())
-    finds = int(rows["linked_finds"].sum())
-    if finds == 0:
-        return (f"Across these five locations: {searches:,} stop-and-searches "
-                "(find/outcome data not reported for this force).")
-    return (f"Across these five locations: {searches:,} stop-and-searches, "
-            f"{finds:,} finds — {finds / searches:.0%} found something.")
+def hotspots_summary_all() -> str:
+    """One-line headline for the all-forces hotspots panel: total searches across
+    every force's five busiest sites, and the combined find rate across the
+    forces that report linked outcomes."""
+    df = HOTSPOTS_DF
+    n_forces = df["force"].nunique()
+    searches = int(df["searches"].sum())
+    reporting = df.groupby("force")["linked_finds"].sum()
+    rep = df[df["force"].isin(reporting[reporting > 0].index)]
+    rep_searches = int(rep["searches"].sum())
+    rep_finds    = int(rep["linked_finds"].sum())
+    if rep_searches > 0:
+        return (f"{searches:,} stop-and-searches across {n_forces} forces' busiest "
+                f"locations; where outcomes are reported, "
+                f"{rep_finds / rep_searches:.0%} found something.")
+    return (f"{searches:,} stop-and-searches across {n_forces} forces' busiest "
+            "locations.")
+
+
+def _reco_li(label: str, text: str) -> html.Li:
+    """One observation line: a bold label, then a plain-language read-out."""
+    return html.Li([html.Span(f"{label}: ", className="bold"), text])
+
+
+def _reco_items(force_name: str, basis: str, pool: str) -> list:
+    """The per-force observation lines — each a direct read of a value already
+    shown elsewhere on the dashboard (the map's allocation gap, the ILP's
+    recommended change, the radar's crime mix, the functions panel, the hotspots
+    panel). Deterministic; no inference beyond ranking and a small threshold."""
+    row     = DF[DF["force"] == force_name].iloc[0]
+    profile = row["crime_profile"]
+    items   = []
+
+    # 1. Resourcing position on the active basis (the map's gap).
+    if basis == "budget":
+        gap, share_val, share_lbl = (row["allocation_gap_funding"],
+                                     row["funding_share_pct"], "funding share")
+    else:
+        gap, share_val, share_lbl = (row["allocation_gap"],
+                                     row["actual_share_pct"], "officer share")
+    harm = row["harm_share_pct"]
+    if gap > 0.3:
+        res = (f"over-resourced — {share_lbl} {share_val:.1f}% sits {gap:+.1f} pp "
+               f"above its {harm:.1f}% harm share")
+    elif gap < -0.3:
+        res = (f"under-resourced — {share_lbl} {share_val:.1f}% sits "
+               f"{abs(gap):.1f} pp below its {harm:.1f}% harm share")
+    else:
+        res = (f"resourced broadly in line with harm — {share_lbl} {share_val:.1f}% "
+               f"vs {harm:.1f}% harm share")
+    items.append(_reco_li("Resourcing", res))
+
+    # 2. The model's own recommended change for this force.
+    alloc = ALLOCATION_BUDGET if basis == "budget" else ALLOCATION_FTE[pool]
+    if force_name in alloc.index:
+        diff = alloc.loc[force_name, "difference"]
+        if basis == "budget":
+            change = f"£{diff / 1e6:+,.0f}m in formula grant"
+        else:
+            pool_lbl = ("all workforce pools" if pool == "all"
+                        else allocation_loader.POOL_META[pool][1])
+            change = f"{diff:+,.0f} FTE ({pool_lbl})"
+        items.append(_reco_li("Model", f"the ILP recommends {change}"))
+    else:
+        items.append(_reco_li(
+            "Model", "outside the ILP grant model — treated as an outlier"))
+
+    # 3. Crime mix: most over-indexed recorded categories (ASB floor excluded).
+    ratios = sorted(
+        ((profile[ct] / NATIONAL_PROFILE[ct], ct)
+         for ct in data.CRIME_TYPES if NATIONAL_PROFILE[ct] > 0),
+        reverse=True,
+    )
+    (r1, c1), (r2, c2), (rl, cl) = ratios[0], ratios[1], ratios[-1]
+    items.append(_reco_li(
+        "Crime mix",
+        f"over-indexes on {data.CRIME_TYPE_SHORT[c1]} ({r1:.1f}×) and "
+        f"{data.CRIME_TYPE_SHORT[c2]} ({r2:.1f}×) vs national; lightest on "
+        f"{data.CRIME_TYPE_SHORT[cl]} ({rl:.1f}×)"))
+
+    # 4. Officer mix: most over- and under-invested function vs national.
+    frow = FUNCTIONS_DF.loc[force_name]
+    fdiffs = sorted(((frow[f] - functions_loader.NATIONAL_SHARES[f], f)
+                     for f in functions_loader.FUNCTIONS), reverse=True)
+    (d_over, f_over), (d_under, f_under) = fdiffs[0], fdiffs[-1]
+    items.append(_reco_li(
+        "Officer mix",
+        f"{d_over:+.1f} pp {f_over}, {d_under:+.1f} pp {f_under} vs national"))
+
+    # 5. Stop-and-search effort, where the force has hotspot data.
+    hs = HOTSPOTS_DF[HOTSPOTS_DF["force"] == force_name]
+    if not hs.empty:
+        s = int(hs["searches"].sum())
+        f = int(hs["linked_finds"].sum())
+        if f > 0:
+            items.append(_reco_li(
+                "Stop-and-search",
+                f"{s:,} searches across its 5 busiest sites, {f / s:.0%} find rate"))
+        else:
+            items.append(_reco_li(
+                "Stop-and-search",
+                f"{s:,} searches across its 5 busiest sites "
+                "(find rate not reported)"))
+
+    return items
+
+
+def build_recommendations(force_name: str, basis: str, pool: str) -> list:
+    """The recommendations-panel body: a short list of observations for the
+    selected force, plus a note that the interpretation belongs in the report.
+    The national overview carries no force-level lines."""
+    if force_name == NATIONAL_KEY:
+        return [html.P(
+            "England & Wales overview — pick a force (dropdown or map) for "
+            "force-level observations.", className="reco-note")]
+    return [
+        html.Ul(_reco_items(force_name, basis, pool), className="reco-list"),
+        html.P("Descriptive read-out of the panels above — strategic "
+               "interpretation is in the report.", className="reco-note"),
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -650,7 +799,9 @@ app.layout = html.Div([
                 html.Label("Selected force", className="control-label"),
                 dcc.Dropdown(
                     id="force-dropdown",
-                    options=[{"label": f, "value": f} for f in sorted(DF["force"])],
+                    options=([{"label": NATIONAL_KEY, "value": NATIONAL_KEY}]
+                             + [{"label": f, "value": f}
+                                for f in sorted(DF["force"])]),
                     value=DEFAULT_FORCE,
                     clearable=False,
                     className="force-dropdown",
@@ -924,16 +1075,24 @@ app.layout = html.Div([
 
         html.Div([
             html.H2(id="radar-title"),
-            html.P(
-                "Each axis is the share of crime in that category, normalised "
-                "to the national average. The grey circle is the national "
-                "baseline (1.0× on every axis). The 14th axis, ASB (floor), is "
-                "the forecast-derived anti-social-behaviour volume.",
-                className="panel-caption",
-            ),
+            html.P(id="radar-caption", className="panel-caption"),
             dcc.Graph(id="radar-graph", config={"displayModeBar": False}),
         ], className="panel panel-radar"),
     ], className="main-grid"),
+
+    html.Section([
+        html.Div([
+            html.Div([html.H2(id="reco-title")], className="panel-header"),
+            html.P(
+                "A plain read-out of the panels for the selected force — its "
+                "resourcing position, the model's recommended change, and where "
+                "its crime and officer mix sit against the national picture. "
+                "Observations only; the reasoning is in the report.",
+                className="panel-caption",
+            ),
+            html.Div(id="reco-content", className="reco-content"),
+        ], className="panel panel-reco"),
+    ], className="reco-row"),
 
     html.Section([
         html.Div([
@@ -984,22 +1143,25 @@ app.layout = html.Div([
 
     html.Section([
         html.Div([
-            html.Div([html.H2(id="hotspots-title")], className="panel-header"),
+            html.Div([html.H2("Stop-and-search hotspots — all forces")],
+                     className="panel-header"),
             html.P(
-                "Where this force concentrates stop-and-search, and how often "
-                "it pays off — its five busiest search locations (data.police.uk, "
-                "2023–2026). Bigger points mean more searches; colour is the "
-                "find rate (dark = searches there rarely find anything, bright = "
-                "they usually do), so a large dark point is a lot of searching "
-                "for little result. This is where search effort goes and how "
-                "effective it is — not where crime is highest, which the map and "
-                "forecast above answer. Recorded for 39 of the 42 forces; drag "
-                "to pan, use the controls to zoom.",
+                "Where forces concentrate stop-and-search across England & "
+                "Wales — every force's five busiest search locations "
+                "(data.police.uk, 2023–2026). Bigger points mean more searches; "
+                "colour is the find rate (dark = searches there rarely find "
+                "anything, bright = they usually do). Grey points are forces "
+                "that record searches but report no linked outcomes, where a "
+                "find rate would mislead. This is where search effort goes and "
+                "how effective it is — not where crime is highest, which the map "
+                "and forecast above answer. Published for 39 of the 42 forces; "
+                "drag to pan, scroll to zoom.",
                 className="panel-caption",
             ),
-            html.P(id="hotspots-summary", className="hotspots-summary"),
+            html.P(hotspots_summary_all(), className="hotspots-summary"),
             dcc.Graph(
                 id="hotspots-graph",
+                figure=build_hotspots_all(),
                 config={"scrollZoom": True, "displayModeBar": True,
                         "displaylogo": False},
             ),
@@ -1051,7 +1213,9 @@ app.layout = html.Div([
     Input("force-dropdown", "value"),
 )
 def update_map(basis: str, force_name: str) -> go.Figure:
-    return build_map(basis, force_name)
+    # National has no single geometry to outline, so pass no highlight.
+    highlight = None if force_name == NATIONAL_KEY else force_name
+    return build_map(basis, highlight)
 
 
 @app.callback(
@@ -1167,11 +1331,22 @@ def update_basis_dependent(basis: str, pool: str):
 @app.callback(
     Output("radar-graph", "figure"),
     Output("radar-title", "children"),
+    Output("radar-caption", "children"),
     Input("force-dropdown", "value"),
 )
 def update_radar(force_name: str):
-    title = f"Crime profile — {force_name}"
-    return build_radar(force_name), title
+    if force_name == NATIONAL_KEY:
+        title = "Crime profile — England & Wales (national)"
+        caption = ("Each axis is that category's share of all recorded crime "
+                   "nationally (plus the anti-social-behaviour floor) — the "
+                   "national mix every force's radar is measured against.")
+    else:
+        title = f"Crime profile — {force_name}"
+        caption = ("Each axis is the share of crime in that category, normalised "
+                   "to the national average. The grey circle is the national "
+                   "baseline (1.0× on every axis). The 14th axis, ASB (floor), is "
+                   "the forecast-derived anti-social-behaviour volume.")
+    return build_radar(force_name), title, caption
 
 
 @app.callback(
@@ -1211,14 +1386,17 @@ def update_forecast(force_name: str):
 
 
 @app.callback(
-    Output("hotspots-graph", "figure"),
-    Output("hotspots-title", "children"),
-    Output("hotspots-summary", "children"),
+    Output("reco-content", "children"),
+    Output("reco-title",   "children"),
     Input("force-dropdown", "value"),
+    Input("basis-toggle",   "value"),
+    Input("pool-toggle",    "value"),
 )
-def update_hotspots(force_name: str):
-    title = f"Stop-and-search hotspots — {force_name}"
-    return build_hotspots(force_name), title, hotspots_summary(force_name)
+def update_recommendations(force_name: str, basis: str, pool: str):
+    """The 'what the data suggests' panel reacts to the force, the basis (which
+    gap and which ILP table to read), and the workforce pool."""
+    label = "England & Wales" if force_name == NATIONAL_KEY else force_name
+    return build_recommendations(force_name, basis, pool), f"What the data suggests — {label}"
 
 
 # ---------------------------------------------------------------------------
