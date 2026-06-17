@@ -34,7 +34,12 @@ The project runs in three layers, all sharing one harm weighting:
   flips the resource basis between **funding (£)** and **officers (FTE)**.
 - **Crime-profile radar** — the selected force's mix across the 13 recorded
   crime categories plus anti-social behaviour, normalised to the national
-  average (the grey circle). Click any force on the map to update it.
+  average (the grey circle). Click any force on the map to update it, or pick
+  **England & Wales (national)** to see the national crime mix in absolute shares.
+- **What the data suggests** — a plain-language read-out for the selected force:
+  its resourcing position, the ILP's recommended change, and where its crime and
+  officer mix sit against the national picture. Descriptive only — a formatted
+  summary of the panels above, with the interpretation left to the report.
 - **Officer function mix** — how the force splits its officers across the 12
   wider CIPFA Police Objective Analysis (POA) functions, against the national
   split.
@@ -43,12 +48,14 @@ The project runs in three layers, all sharing one harm weighting:
   (patrol / investigators / PCSOs, or all three combined) on the officer basis.
 - **Crime forecast** — the LightGBM 12-month prediction (Mar 2026 – Feb 2027)
   of total offences for the selected force.
-- **Stop-and-search hotspots** — the five locations with the most
-  stop-and-searches in the selected force (data.police.uk, 2023–2026), plotted
-  on a street map with the find rate at each. Published for 39 of the 42 forces.
+- **Stop-and-search hotspots** — every force's five busiest stop-and-search
+  locations on one England & Wales map (data.police.uk, 2023–2026), sized by
+  search volume and coloured by find rate. Published for 39 of the 42 forces.
 
-The map, radar, forecast and hotspots all respond to the selected force; the
-basis and workforce-pool toggles drive the map and the reallocation panel.
+The radar, function mix, forecast and recommendations update with the selected
+force (including the England & Wales national option); the map highlights the
+selection, and the stop-and-search map shows every force at once. The basis and
+workforce-pool toggles drive the map and the reallocation panel.
 
 ## Scope: 42 forces
 
