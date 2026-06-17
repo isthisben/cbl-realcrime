@@ -4,14 +4,17 @@ TU/e 4CBLW020 — Real-World Crime project
 
 Panels:
   1. Choropleth map of the allocation gap (resource share − harm share) per force
-  2. Radar: the selected force's crime profile vs the national average
-     (14 categories, including the anti-social-behaviour floor)
-  3. Officer function mix: selected force vs national, across the CIPFA POA functions
-  4. Reallocation: the ILP-recommended change in formula grant (£) or workforce FTE
-  5. Crime forecast: the 12-month LightGBM prediction for the selected force
-  6. Stop-and-search hotspots: the selected force's five busiest search locations
+  2. Radar: the selected force's crime profile vs the national average — or the
+     national crime mix in absolute shares (14 categories, incl. the ASB floor)
+  3. What the data suggests: a plain-language read-out of the selected force's
+     position (resourcing gap, ILP-recommended change, crime + officer-mix skew)
+  4. Officer function mix: selected force vs national, across the CIPFA POA functions
+  5. Reallocation: the ILP-recommended change in formula grant (£) or workforce FTE
+  6. Crime forecast: the 12-month LightGBM prediction for the selected force
+  7. Stop-and-search hotspots: every force's five busiest search locations, all at once
 
-Controls: funding-vs-officers basis toggle, workforce-pool selector, force dropdown.
+Controls: funding-vs-officers basis toggle, workforce-pool selector, and a force
+dropdown that includes an England & Wales (national) option.
 
 Run with:  python app.py
 Then open: http://127.0.0.1:8050
