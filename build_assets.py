@@ -7,8 +7,9 @@ Output (written to exports/):
                       total funding — on one shared colour scale. Open in a
                       browser, then screenshot for chat / slides / report.
 
-Both maps use the same per-force CCHI harm weighting; the left compares officer
-share to harm share, the right compares total-funding share to harm share.
+The left map compares each force's current workforce share to the ILP's
+recommended share (officers are allocated per pool, so total harm is not the
+right officer benchmark); the right compares total-funding share to harm share.
 
 Re-run any time the dashboard data changes:
     python build_assets.py
@@ -40,9 +41,9 @@ FONT_FAMILY = '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
 
 HOVER_OFFICER = (
     "<b>%{customdata[0]}</b><br>"
-    "Officers: %{customdata[4]:,.0f} FTE<br>"
-    "Officer share: %{customdata[1]}%<br>"
-    "Harm share: %{customdata[2]}%<br>"
+    "Workforce: %{customdata[4]:,.0f} FTE<br>"
+    "Current share: %{customdata[1]}%<br>"
+    "Model-recommended share: %{customdata[2]}%<br>"
     "Allocation gap: %{customdata[3]:+.2f} pp"
     "<extra></extra>"
 )
@@ -56,11 +57,11 @@ HOVER_FUNDING = (
 )
 
 
-def _customdata(df, share_col, gap_col, resource):
+def _customdata(df, share_col, bench_col, gap_col, resource):
     return list(zip(
         df["force"],
         df[share_col].round(2),
-        df["harm_share_pct"].round(2),
+        df[bench_col].round(2),
         df[gap_col].round(2),
         resource,
     ))
@@ -76,10 +77,10 @@ def build_comparison(df, geojson) -> go.Figure:
         horizontal_spacing=0.02,
     )
 
-    officer_custom = _customdata(df, "actual_share_pct", "allocation_gap",
-                                 df["officer_fte"])
-    funding_custom = _customdata(df, "funding_share_pct", "allocation_gap_funding",
-                                 df["total_funding"] / 1_000_000)
+    officer_custom = _customdata(df, "fte_current_share_pct", "fte_target_share_pct",
+                                 "allocation_gap", df["fte_current"])
+    funding_custom = _customdata(df, "funding_share_pct", "harm_share_pct",
+                                 "allocation_gap_funding", df["total_funding"] / 1_000_000)
 
     fig.add_trace(go.Choropleth(
         geojson=geojson,
@@ -123,7 +124,8 @@ def build_comparison(df, geojson) -> go.Figure:
             text=("<b>Allocation gap by force — officer vs total-funding "
                   "basis</b><br>"
                   "<span style='font-size:12px;color:#555'>"
-                  "gap = resource share % − harm share %  ·  "
+                  "officers: current vs model-recommended share  ·  "
+                  "funding: share vs harm share  ·  "
                   "<span style='color:#2166ac;font-weight:600'>blue</span> "
                   "over-resourced  ·  "
                   "<span style='color:#b2182b;font-weight:600'>red</span> "

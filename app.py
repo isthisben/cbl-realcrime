@@ -84,17 +84,19 @@ def build_map(basis: str, selected_force: str | None) -> go.Figure:
     if basis == "budget":
         gap_col   = "allocation_gap_funding"
         share_col = "funding_share_pct"
+        harm_col  = "harm_share_pct"
     else:
         gap_col   = "allocation_gap"
-        share_col = "actual_share_pct"
-    harm_col = "harm_share_pct"
+        share_col = "fte_current_share_pct"
+        harm_col  = "fte_target_share_pct"
 
-    # Cap the colour scale so the Metropolitan Police (the large over-resourced
-    # outlier under either basis — about +6pp on funding, +7pp on officers)
-    # doesn't dominate and leave every other force looking nearly white. The
-    # Met saturates at full green and the rest of the country shows a useful
-    # gradient; the hover always shows the true value. Funding gaps are tighter
-    # than officer gaps, so the funding basis uses a tighter cap.
+    # Cap the colour scale so the Metropolitan Police — the large outlier under
+    # either basis (about +6pp over-resourced on funding; roughly -6pp under the
+    # model's recommended officer share, i.e. the ILP adds it officers) — doesn't
+    # dominate and leave every other force looking nearly white. The Met
+    # saturates and the rest of the country shows a useful gradient; the hover
+    # always shows the true value. Funding gaps are tighter than officer gaps, so
+    # the funding basis uses a tighter cap.
     cmax = 2.0 if basis == "budget" else 3.0
 
     if basis == "budget":
@@ -119,13 +121,13 @@ def build_map(basis: str, selected_force: str | None) -> go.Figure:
             DF[share_col].round(2),
             DF[harm_col].round(2),
             DF[gap_col].round(2),
-            DF["officer_fte"],
+            DF["fte_current"],
         ))
         hovertemplate = (
             "<b>%{customdata[0]}</b><br>"
-            "Officers: %{customdata[4]:,.0f} FTE<br>"
-            "Officer share: %{customdata[1]}%<br>"
-            "Harm share: %{customdata[2]}%<br>"
+            "Workforce: %{customdata[4]:,.0f} FTE<br>"
+            "Current share: %{customdata[1]}%<br>"
+            "Model-recommended share: %{customdata[2]}%<br>"
             "Allocation gap: %{customdata[3]:+.2f} pp"
             "<extra></extra>"
         )
@@ -662,19 +664,20 @@ def _reco_items(force_name: str, basis: str, pool: str) -> list:
     if basis == "budget":
         gap, share_val, share_lbl = (row["allocation_gap_funding"],
                                      row["funding_share_pct"], "funding share")
+        bench_val, bench_lbl = row["harm_share_pct"], "harm share"
     else:
         gap, share_val, share_lbl = (row["allocation_gap"],
-                                     row["actual_share_pct"], "officer share")
-    harm = row["harm_share_pct"]
+                                     row["fte_current_share_pct"], "workforce share")
+        bench_val, bench_lbl = row["fte_target_share_pct"], "model-recommended share"
     if gap > 0.3:
         res = (f"over-resourced — {share_lbl} {share_val:.1f}% sits {gap:+.1f} pp "
-               f"above its {harm:.1f}% harm share")
+               f"above its {bench_val:.1f}% {bench_lbl}")
     elif gap < -0.3:
         res = (f"under-resourced — {share_lbl} {share_val:.1f}% sits "
-               f"{abs(gap):.1f} pp below its {harm:.1f}% harm share")
+               f"{abs(gap):.1f} pp below its {bench_val:.1f}% {bench_lbl}")
     else:
-        res = (f"resourced broadly in line with harm — {share_lbl} {share_val:.1f}% "
-               f"vs {harm:.1f}% harm share")
+        res = (f"resourced broadly in line — {share_lbl} {share_val:.1f}% "
+               f"vs {bench_val:.1f}% {bench_lbl}")
     items.append(_reco_li("Resourcing", res))
 
     # 2. The model's own recommended change for this force.
@@ -1285,16 +1288,17 @@ def update_basis_dependent(basis: str, pool: str):
         pool_label = ("all workforce pools" if pool == "all"
                       else allocation_loader.POOL_META[pool][1])
         national_pool = f"{int(round(alloc['current'].sum())):,} FTE"
-        formula = "gap  =  officer share %  −  harm share %"
+        formula = "gap  =  current FTE share %  −  model-recommended share %"
 
         caption = [
             html.Span("Blue", className="legend-blue"),
-            " = more officers than harm suggests is needed (over-resourced). ",
+            " = more officers than the model recommends (over-resourced). ",
             html.Span("Red",   className="legend-red"),
-            " = fewer officers than harm suggests (under-resourced). ",
-            "The map gap uses warranted-officer headcount; the reallocation "
-            "below optimises the selected workforce pool. Click a force to "
-            "update the radar chart.",
+            " = fewer officers than the model recommends (under-resourced). ",
+            "The map gap compares each force's current workforce share with the "
+            "ILP's recommended share across all three pools; the reallocation "
+            "below breaks it down by the selected pool. Click a force to update "
+            "the radar chart.",
         ]
         footnote = []
         footnote_style = {"display": "none"}

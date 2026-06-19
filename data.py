@@ -36,6 +36,7 @@ import pathlib
 
 import pandas as pd
 
+import allocation_loader
 import asb_loader
 import cache
 import cchi_loader
@@ -49,7 +50,7 @@ import workforce_loader
 # changed harm formula, different roll-up), so an existing on-disk cache is
 # rebuilt instead of served stale. Source-file changes invalidate the cache
 # automatically; this covers code changes that the files can't signal.
-_CACHE_VERSION = 4
+_CACHE_VERSION = 5
 
 # Committed deploy snapshot. A host that ships only this snapshot (not the
 # ~15 MB raw ODS files) reads it directly — see build_dataset. Regenerate with
@@ -222,12 +223,35 @@ def _assemble_dataset() -> pd.DataFrame:
     df["funding_share_pct"] = df["total_funding"] / total_funding * 100
     df["harm_share_pct"]    = df["harm_total"]    / total_harm    * 100
 
-    # Officer (headcount) allocation gap and funding allocation gap, both
-    # measured as resource share - harm share. Total funding is grant + precept
-    # + specific grants, so a force well funded locally (high precept) no longer
-    # looks under-resourced on grant alone.
-    df["allocation_gap"]         = df["actual_share_pct"]  - df["harm_share_pct"]
+    # Funding allocation gap: resource share - harm share. The formula grant is
+    # a single pool redistributed on total harm, so total-harm share is the
+    # right benchmark. Total funding is grant + precept + specific grants, so a
+    # force well funded locally (high precept) no longer looks under-resourced
+    # on grant alone.
     df["allocation_gap_funding"] = df["funding_share_pct"] - df["harm_share_pct"]
+
+    # Officer allocation gap: current workforce share - the ILP's recommended
+    # workforce share (all three pools combined, per force). Officers are
+    # allocated *per pool* against that pool's harm — patrol against high-volume
+    # crime, investigators against serious crime — so comparing officer share to
+    # *total* harm mixes the pools and mislabels high-volume forces: the Met
+    # carries ~a third of national patrol demand but a smaller share of total
+    # severity-weighted harm, so total harm wrongly flags it over-resourced even
+    # though the ILP adds it officers. Benchmarking against the optimiser's own
+    # recommendation keeps the map consistent with the reallocation it drives:
+    # blue = more officers than the model recommends, red = fewer.
+    fte_alloc = allocation_loader.load_allocation(df, basis="fte", pool="all")
+    cur = fte_alloc["current"].reindex(df["force"]).to_numpy()
+    rec = fte_alloc["recommended"].reindex(df["force"]).to_numpy()
+    if pd.isna(cur).any() or pd.isna(rec).any():
+        missing = sorted(set(df["force"]) - set(fte_alloc.index))
+        raise ValueError(f"FTE allocation is missing forces from the dataset: {missing}")
+    fte_pool_total = cur.sum()
+    df["fte_current"]           = cur
+    df["fte_recommended"]       = rec
+    df["fte_current_share_pct"] = cur / fte_pool_total * 100
+    df["fte_target_share_pct"]  = rec / fte_pool_total * 100
+    df["allocation_gap"]        = df["fte_current_share_pct"] - df["fte_target_share_pct"]
 
     return df
 
