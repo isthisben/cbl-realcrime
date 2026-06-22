@@ -1,4 +1,4 @@
-# Cambridge Crime Harm Index — values used by the dashboard
+# Cambridge Crime Harm Index: values used by the dashboard
 
 This document records the CCHI weighting the dashboard applies, how the
 per-force category weights are derived from the Cambridge index, and the
@@ -37,13 +37,13 @@ Subgroup* level. Subgroup is therefore the finest level at which Sherman
 scores join to PRC volumes. The per-force category weight is built in two
 steps:
 
-1. **Median CCHI per PRC Offence Subgroup** — the median of all Sherman 2026
+1. **Median CCHI per PRC Offence Subgroup.** The median of all Sherman 2026
    entries under that subgroup (table below). Median is preferred over mean
    for robustness to right-tail outliers (firearms within `Possession of
    weapons`, GBH-with-intent within `Violence with injury`) and to match
    Sherman's "first rung of the ladder" principle.
 
-2. **Volume-weighted average to the 13 categories, per force** — each
+2. **Volume-weighted average to the 13 categories, per force.** Each
    category's CCHI for a force is the count-weighted average of its subgroup
    medians, using that force's own 2024/25 subgroup mix. Nine categories map
    to a single offence severity, so they collapse to one national value
@@ -90,12 +90,12 @@ is in column 2; the value used is the median (bold).
 ## Per-force category weights (step 2)
 
 `cchi_loader.load_force_category_cchi()` reads
-`data/cchi_weights_by_force_category.csv` — one row per force × category. Nine
+`data/cchi_weights_by_force_category.csv`, one row per force × category. Nine
 categories carry a single national weight; four vary per force:
 
 | Category                     | Per force? | Value / range (days) | Notes                                                            |
 |------------------------------|:----------:|---------------------:|------------------------------------------------------------------|
-| Robbery                      |     no     |              365.00  | two subgroups, both 365 — mix is irrelevant                      |
+| Robbery                      |     no     |              365.00  | two subgroups, both 365, mix is irrelevant                      |
 | Possession of weapons        |     no     |              273.75  | single subgroup                                                  |
 | Other crime                  |     no     |               10.00  | single subgroup (Misc crimes against society)                    |
 | Public order                 |     no     |                7.50  | single subgroup                                                  |
@@ -112,22 +112,21 @@ categories carry a single national weight; four vary per force:
 A force with a more severe within-category mix (more residential burglary, or
 more homicide/rape within violence) earns a heavier weight per offence.
 
-## Anti-social behaviour — the floor
+## Anti-social behaviour: the floor
 
 ASB is the single highest-volume category a force handles, but it is logged as
 incidents, not notifiable crime, so it has no Cambridge CCHI score and is
 absent from the PRC tables. To represent it without distorting a harm total
-dominated by violence and burglary, the dashboard sets it at the harm **floor**
-— CCHI = 1 day per incident (`cchi_loader.ASB_FLOOR_CCHI`), the value Cambridge
+dominated by violence and burglary, the dashboard sets it at the harm **floor**: CCHI = 1 day per incident (`cchi_loader.ASB_FLOOR_CCHI`), the value Cambridge
 gives the lowest notifiable offence (shoplifting). ASB volumes are
 forecast-derived (`asb_loader`, from the LightGBM forecast, data.police.uk
 lineage), so ASB appears as a labelled 14th radar axis and a small additive
-harm term (~0.17% of national harm) — never folded silently into the recorded
+harm term (~0.17% of national harm), never folded silently into the recorded
 figures.
 
 ## Recorded now, forecast for allocation
 
-The map and radar score harm on **recorded** crime (PRC 2024/25) — the harm
+The map and radar score harm on **recorded** crime (PRC 2024/25), the harm
 forces face today. The ILP allocation was optimised against **forecast** harm
 (predicted next 12 months) under these same weights. The two track each other
 closely (≈0.998 correlation on harm share) without being identical, because the
