@@ -1,15 +1,15 @@
 # Source data
 
 Five releases from the Home Office (Official Statistics + the Police Grant
-Report) and one harm-weight release from the University of Cambridge — all open
+Report) and one harm-weight release from the University of Cambridge, all open
 data published under the Open Government Licence (Home Office) or Creative
 Commons (Cambridge). Two further inputs are produced inside the project: the
-per-force CCHI weight file (derived from the Cambridge index — see
+per-force CCHI weight file (derived from the Cambridge index, see
 `CCHI_SOURCES.md`) and the model team's forecast + ILP outputs (see "Model team
 outputs" below).
 
 **Scope note.** The raw Home Office releases cover the 43 territorial police
-forces of England and Wales. The dashboard reports **42** of them — Greater
+forces of England and Wales. The dashboard reports **42** of them. Greater
 Manchester is dropped project-wide because it is absent from the model team's
 forecast and ILP outputs. So where a file below is described as covering "43
 forces" that is the raw release; the assembled dashboard totals (e.g. £16.69 bn
@@ -17,7 +17,7 @@ total funding, 138,331 officer FTE) are over the 42 forces in scope.
 
 ## prc-pfa-mar2013-onwards-tables-230426.ods
 
-Police recorded crime — Police Force Area open data tables.
+Police recorded crime: Police Force Area open data tables.
 Year ending March 2013 through year ending December 2025 (Q1–Q3 of 2025/26).
 
 - Release page: https://www.gov.uk/government/statistical-data-sets/police-recorded-crime-and-outcomes-open-data-tables
@@ -29,14 +29,14 @@ Long format, one sheet per financial year. Columns:
 Financial Year, Financial Quarter, Force Name, Offence Description,
 Offence Group, Offence Subgroup, Offence Code, Number of Offences.
 
-The 2024/25 sheet contains 25,356 rows covering 47 entries — 43 territorial
+The 2024/25 sheet contains 25,356 rows covering 47 entries: 43 territorial
 police forces of England & Wales, plus British Transport Police and three
 fraud-reporting bodies (Action Fraud, CIFAS, UK Finance) which do not have
 police force areas. The dashboard filters to the 43 territorial forces.
 
 ## open-data-table-police-workforce-280126.ods
 
-Police workforce, England and Wales — workforce open data table.
+Police workforce, England and Wales: workforce open data table.
 Snapshots at 31 March each year, 2007 through 2025.
 
 - Release page: https://www.gov.uk/government/statistics/police-workforce-england-and-wales-31-march-2025
@@ -54,7 +54,7 @@ Worker type = "Police Officer" only and the most recent snapshot (31 March
 
 ## open-data-table-police-workforce-functions-280126.ods
 
-Police workforce, England and Wales — functions open data table. Officers and
+Police workforce, England and Wales: functions open data table. Officers and
 staff categorised by their primary role under the CIPFA Police Objective
 Analysis (POA) framework. Snapshots at 31 March each year, 2015 through 2025.
 
@@ -80,12 +80,12 @@ Policing" vs "Local policing"), which the loader merges case-insensitively.
 
 Central government grant per police force, 2025-26 financial year.
 Hand-extracted from the Home Office *Police Grant Report (England and Wales)
-2025-26* per-force table — the 'Overall Total' column, which is the sum of:
+2025-26* per-force table, the 'Overall Total' column, which is the sum of:
 
 - Police Main Grant
-- ex-DCLG Formula Funding (English forces only — Welsh forces receive
+- ex-DCLG Formula Funding (English forces only; Welsh forces receive
   equivalent funding via the Welsh Government)
-- Legacy Council Tax Grants (English forces only — same Welsh-routing note)
+- Legacy Council Tax Grants (English forces only, same Welsh-routing note)
 - Welsh Top-Up (Welsh forces only)
 
 - Release page: https://www.gov.uk/government/publications/police-grant-report-england-and-wales-2025-to-2026
@@ -103,13 +103,13 @@ Welsh forces (Dyfed-Powys, Gwent, North Wales, South Wales) appear lower
 than English peers here because two of the four component grants flow through
 the Welsh Government separately. That under-count does not distort the
 allocation gap, which is measured on total funding from
-`police-funding-england-and-wales-2015-to-2026-tables.ods` (below) — those
+`police-funding-england-and-wales-2015-to-2026-tables.ods` (below); those
 totals include the Welsh-routed money.
 
 ## police-funding-england-and-wales-2015-to-2026-tables.ods
 
 Home Office Police Funding England and Wales tables, 2015-16 through
-2025-26. Companion publication to the Police Grant Report — published
+2025-26. Companion publication to the Police Grant Report, published
 annually as the Police Funding Statistics release.
 
 - Release page: https://www.gov.uk/government/statistics/police-funding-england-and-wales-2015-to-2026
@@ -160,13 +160,13 @@ HO_SUB_SUB_CODE.
 `Expired offences` (17 rows): Home Office classifications retired before
 the 2024/25 PRC reporting period (e.g. pre-2017 burglary classifications
 expired 31/03/17, aggravated burglary residential variants expired
-2023-05-01). Out of scope — these codes do not appear in the PRC tables
+2023-05-01). Out of scope: these codes do not appear in the PRC tables
 the dashboard uses.
 
 `Offences need clarity` (3 rows): residual ambiguities flagged by the
 Cambridge team where the offence-to-code mapping could not be resolved
 (Magistrates' Courts Act, Prison Act, Local Government Misc Provisions
-Acts catch-alls). Out of scope — these are not the dominant offences in
+Acts catch-alls). Out of scope: these are not the dominant offences in
 any PRC subgroup.
 
 `Cover page`: licensing notice, no data.
@@ -183,7 +183,7 @@ aggregation rule used by the dashboard are documented in
 
 Produced inside the project by the predictor / optimisation teammates, not
 downloaded. They are committed so the dashboard and its deploy ship with them.
-The raw deliverables were normalised into the files below — long force names
+The raw deliverables were normalised into the files below: long force names
 ("X Constabulary" / "X Police") mapped to the canonical 42, and the monthly
 forecast kept in long format.
 
@@ -192,7 +192,7 @@ forecast kept in long format.
 12-month crime forecast per force × category, from a LightGBM model
 (`force, crime_type, month, y_pred`; 42 forces × 14 categories × 12 months over
 the window March 2026 – February 2027). Normalised from the team's
-`forecast_2026_03_to_2027_02.csv` (Vlad) — long force names mapped to the
+`forecast_2026_03_to_2027_02.csv` (Vlad), with long force names mapped to the
 canonical 42. Covers the 13 recorded categories plus anti-social behaviour.
 The "predict" layer of the project; also the source of ASB volumes; the exact
 forecast the ILP optimised against. Read by `forecast_loader.py`.
@@ -211,9 +211,9 @@ per-force CCHI weights. Read by `allocation_loader.py` for the reallocation
 panels.
 
 - `Pool_1_Patrol_…`, `Pool_2_Investigators_…`, `Pool_3_PCSOs_…`,
-  `all_pools_allocation_results.csv` — workforce reallocation across three
+  `all_pools_allocation_results.csv`: workforce reallocation across three
   pools (42 forces; each pool's national FTE total is conserved).
-- `grant_redistribution_result.csv` — formula-grant redistribution toward harm
+- `grant_redistribution_result.csv`: formula-grant redistribution toward harm
   share (41 forces; City of London, a fraud specialist, sits outside the grant
   model).
 
